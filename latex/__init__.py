@@ -71,26 +71,6 @@ def _make_all_parts(dir_name, main_filename, files_to_copy_for_bib):
     print('TOTAL DURATION: {:4.2f} seconds'.format(t_end - t_start))
 
 
-def make_pdf_articulo_resumen():
-    _make_all_parts(
-        dir_name=os.path.join('latex', 'articulo_resumen'),
-        main_filename='articulo-resumen',
-        files_to_copy_for_bib=[
-            'p5_references.bib',
-            'IEEEtran.bst',
-        ])
-
-
-def make_pdf_libro():
-    _make_all_parts(
-        dir_name=os.path.join('latex', 'libro'),
-        main_filename='libro',
-        files_to_copy_for_bib=[
-            'p5_references.bib',
-            'spanish.dtx',
-            'thesis.cls',
-        ])
-
 
 def make_pdf_propuesta():
     _make_all_parts(
@@ -102,31 +82,4 @@ def make_pdf_propuesta():
             'thesis.cls',
         ])
 
-
-def make_pdf_defensa_tecnica():
-    t_start = time.perf_counter()
-
-    dir_name = os.path.join('latex', 'defensa_tecnica')
-    main_filename = 'slides-defensa-tecnica'
-
-    _make_pdf(dir_name, main_filename)
-    _make_pdf(dir_name, main_filename)
-
-    t_end = time.perf_counter()
-    print()
-    print('TOTAL DURATION: {:4.2f} seconds'.format(t_end - t_start))
-
-
-def make_pdf_defensa_publica():
-    t_start = time.perf_counter()
-
-    dir_name = os.path.join('latex', 'defensa_publica')
-    main_filename = 'slides-defensa-publica'
-
-    _make_pdf(dir_name, main_filename)
-    _make_pdf(dir_name, main_filename)
-
-    t_end = time.perf_counter()
-    print()
-    print('TOTAL DURATION: {:4.2f} seconds'.format(t_end - t_start))
 make_pdf_propuesta()
