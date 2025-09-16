@@ -34,22 +34,23 @@ def _make_pdf(dir_name, main_filename):
 
 
 def _make_glossaries(dir_name, main_filename):
+    base = os.path.splitext(main_filename)[0]  # saca .tex
     _run_cmd(
         cmd='makeglossaries -q -d "{}" {}'.format(
             AUX_DIR,
-            main_filename),
+            base),
         cwd=dir_name)
 
 
 def _make_bibliography(dir_name, main_filename, files_to_copy):
+    base = os.path.splitext(main_filename)[0]
     for filename in files_to_copy:
         src = os.path.join(dir_name, filename)
         dst = os.path.join(dir_name, AUX_DIR, filename)
         shutil.copy2(src, dst)
 
     _run_cmd(
-        cmd='bibtex {}'.format(
-            main_filename),
+        cmd='bibtex {}'.format(base),
         cwd=os.path.join(dir_name, AUX_DIR))
 
 
@@ -93,8 +94,8 @@ def make_pdf_libro():
 
 def make_pdf_propuesta():
     _make_all_parts(
-        dir_name=os.path.join('latex', 'propuesta'),
-        main_filename='propuesta',
+        dir_name=os.path.join('propuesta'),  # en vez de 'latex/propuesta'
+        main_filename='propuesta.tex',
         files_to_copy_for_bib=[
             'p5_references.bib',
             'spanish.dtx',
@@ -128,3 +129,4 @@ def make_pdf_defensa_publica():
     t_end = time.perf_counter()
     print()
     print('TOTAL DURATION: {:4.2f} seconds'.format(t_end - t_start))
+make_pdf_propuesta()
