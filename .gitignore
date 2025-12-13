@@ -1,0 +1,31 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# --- Virtual env ---
+.venv/
+venv/
+ENV/
+env/
+
+# --- Jupyter / IDE ---
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Project outputs (generated) ---
+data/processed/
+models/
+logs/
+
+# (optional) if you don't want to commit raw datasets
+data/raw/

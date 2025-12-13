@@ -105,7 +105,7 @@ async def proxy(full_path: str, request: Request):
 
     feats = extract_http_features(
         method=request.method,
-        uri=str(request.url),
+        uri=(request.url.path + (('?' + request.url.query) if request.url.query else '')),
         headers=headers,
         body=body,
     )

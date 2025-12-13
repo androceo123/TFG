@@ -14,7 +14,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 1) Build features from a CSV (you will download SR-BH 2020 separately)
-python -m waf_ml.scripts.build_features --input data/raw/srbh.csv --output data/processed/features.parquet
+python -m waf_ml.scripts.build_features --input data/raw/srbh.tsv --output data/processed/features.parquet
 
 # 2) Train OCSVM (binary anomaly detection)
 python -m waf_ml.scripts.train_ocsvm --data data/processed/features.parquet --label-col label_binary --out models/ocsvm.joblib
@@ -35,3 +35,9 @@ python -m waf_ml.waf.proxy --config configs/config.example.yaml
 - `src/waf_ml/data/srbh_loader.py`: loader + label normalization stubs
 - `src/waf_ml/scripts/*`: CLI scripts to build features/train/eval
 - `src/waf_ml/waf/proxy.py`: minimal FastAPI reverse proxy (passive/active)
+
+
+### Debug on a small sample
+```bash
+python -m waf_ml.scripts.build_features --input data/raw/srbh.tsv --output data/processed/features.parquet --sample-n 50000
+```

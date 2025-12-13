@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import joblib
 import pandas as pd
+import numpy as np
 
+from pandas.api.types import is_scalar
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
@@ -15,7 +17,7 @@ from sklearn.multiclass import OneVsRestClassifier
 DEFAULT_FEATURES = [
     "uri_len","path_depth","query_len","n_query_params","max_param_value_len",
     "uri_pct_non_alnum_ratio","encoded","suspicious_tokens_count","has_suspicious_tokens",
-    "uncommon_method","req_content_length","body_len",
+    "uncommon_method","req_content_length","body_len","body_suspicious_tokens_count","body_has_suspicious_tokens","body_encoded",
     "method_GET","method_POST","method_HEAD","method_PUT","method_DELETE","method_PATCH","method_OPTIONS",
     "method_TRACE","method_CONNECT","method_OTHER",
 ]
@@ -36,10 +38,12 @@ def main():
 
     if args.task == "multiclass":
         y = df[args.label_col].astype(str)
-        Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=args.test_size, random_state=args.seed, stratify=y)
+        Xtr, Xte, ytr, yte = train_test_split(
+            X, y, test_size=args.test_size, random_state=args.seed, stratify=y
+        )
         clf = Pipeline([
             ("scaler", StandardScaler()),
-            ("lr", LogisticRegression(max_iter=2000, n_jobs=-1, class_weight="balanced")),
+            ("lr", LogisticRegression(max_iter=2000, class_weight="balanced")),
         ])
         clf.fit(Xtr, ytr)
         pred = clf.predict(Xte)
@@ -49,36 +53,47 @@ def main():
         print(f"Saved: {args.out}")
         return
 
-    # multilabel
-    # Expect label_col to contain Python-like lists OR separator-delimited strings.
+    # ---- multilabel ----
     raw = df[args.label_col]
 
     def normalize(v):
-        if isinstance(v, list):
-            return v
-        if pd.isna(v):
+        # 1) None / scalar-NA
+        if v is None:
             return []
+        if is_scalar(v) and pd.isna(v):
+            return []
+
+        # 2) list-like from parquet (often numpy arrays)
+        if isinstance(v, np.ndarray):
+            v = v.tolist()
+        if isinstance(v, (list, tuple, set)):
+            return [str(x).strip() for x in v if str(x).strip()]
+
+        # 3) strings: separators or stringified python lists
         s = str(v).strip()
-        if not s or s in {"[]", "nan"}:
+        if not s or s.lower() in {"[]", "nan", "none"}:
             return []
-        # try separators
-        for sep in ["|", ",", ";"]:
+
+        for sep in ["|", ";", ","]:
             if sep in s:
                 return [p.strip() for p in s.split(sep) if p.strip()]
-        # maybe it's a stringified python list
+
         if s.startswith("[") and s.endswith("]"):
-            s2 = s.strip("[]").strip()
-            if not s2:
+            inner = s.strip()[1:-1].strip()
+            if not inner:
                 return []
-            return [p.strip().strip("'").strip('"') for p in s2.split(",") if p.strip()]
+            return [p.strip().strip("'").strip('"') for p in inner.split(",") if p.strip()]
+
         return [s]
 
     y_list = raw.map(normalize).tolist()
+
     mlb = MultiLabelBinarizer()
     Y = mlb.fit_transform(y_list)
 
     Xtr, Xte, Ytr, Yte = train_test_split(X, Y, test_size=args.test_size, random_state=args.seed)
-    base = LogisticRegression(max_iter=2000, n_jobs=-1)
+
+    base = LogisticRegression(max_iter=2000)
     clf = Pipeline([
         ("scaler", StandardScaler()),
         ("ovr", OneVsRestClassifier(base)),

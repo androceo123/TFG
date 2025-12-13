@@ -13,7 +13,7 @@ from sklearn.metrics import classification_report
 DEFAULT_FEATURES = [
     "uri_len","path_depth","query_len","n_query_params","max_param_value_len",
     "uri_pct_non_alnum_ratio","encoded","suspicious_tokens_count","has_suspicious_tokens",
-    "uncommon_method","req_content_length","body_len",
+    "uncommon_method","req_content_length","body_len","body_suspicious_tokens_count","body_has_suspicious_tokens","body_encoded",
     # method one-hot
     "method_GET","method_POST","method_HEAD","method_PUT","method_DELETE","method_PATCH","method_OPTIONS",
     "method_TRACE","method_CONNECT","method_OTHER",
