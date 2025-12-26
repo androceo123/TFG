@@ -23,9 +23,9 @@ env/
 Thumbs.db
 
 # --- Project outputs (generated) ---
-data/processed/
+waf-ml-starter/data/processed/
 models/
 logs/
 
 # (optional) if you don't want to commit raw datasets
-data/raw/
+waf-ml-starter/data/raw/
