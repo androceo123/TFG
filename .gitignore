@@ -24,10 +24,12 @@ Thumbs.db
 
 # --- Project outputs (generated) ---
 waf-ml-starter/data/processed/*
+!waf-ml-starter/data/processed/
 !waf-ml-starter/data/processed/.gitkeep
 models/
 logs/
 
 # (optional) if you don't want to commit raw datasets
 waf-ml-starter/data/raw/*
+!waf-ml-starter/data/raw/
 !waf-ml-starter/data/raw/.gitkeep
