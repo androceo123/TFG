@@ -15,6 +15,7 @@ pip install -r requirements.txt
 python -m waf_ml.scripts.build_features --input data/raw/data_capec_multilabel.csv --output data/processed/features.parquet --sep ',' --sample-n 50000
 
 --see the proccessed dataset--
+
 python -c "import pandas as pd; df=pd.read_parquet('data/processed/features.parquet'); df.to_csv('data/processed/features_full.csv', index=False)"
 
 --train the OCSVM model with that processed dataset
