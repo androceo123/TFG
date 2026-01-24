@@ -26,3 +26,7 @@ python -m waf_ml.scripts.train_supervised --data data/processed/features.parquet
 
 --train multilabel training--
 python -m waf_ml.scripts.train_supervised --data data/processed/features.parquet --task multilabel --label-col label_multilabel --out models/ovr_multilabel.joblib
+
+
+--indications, "waf-ml-starter\data\raw" is where you place the unprocessed dataset, and in "waf-ml-starter\data\processed" is where the generated dataset is generated
+
