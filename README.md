@@ -10,6 +10,8 @@ pip install -r requirements.txt
 
 --generate proccessed dataset(size of 50000, not the whole dataset)--
 
+-- To execute the following command, you have to place the harvard dataset inside the "waf-ml-starter\data\raw" directory and then execute the following commands inside the "waf-ml-starter\src\waf_ml\scripts" directory
+
 python -m waf_ml.scripts.build_features --input data/raw/data_capec_multilabel.csv --output data/processed/features.parquet --sep ',' --sample-n 50000
 
 --see the proccessed dataset--
