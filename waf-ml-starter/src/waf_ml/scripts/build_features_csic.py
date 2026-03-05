@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
+import os
+import re
+
 import pandas as pd
 from tqdm import tqdm
 
@@ -27,34 +31,162 @@ def _json_to_headers(s: str) -> dict:
         return {}
 
 
+def _collect_inputs(items: list[str]) -> list[str]:
+    """
+    Accepts:
+      - files
+      - globs (e.g. data/raw/csic/*.txt)
+      - directories (loads **/*.txt)
+    """
+    paths: list[str] = []
+    for it in items:
+        it = (it or "").strip()
+        if not it:
+            continue
+
+        if os.path.isdir(it):
+            paths.extend(sorted(glob.glob(os.path.join(it, "**", "*.txt"), recursive=True)))
+        else:
+            paths.extend(sorted(glob.glob(it)))
+
+    # de-dup, keep order
+    seen = set()
+    out = []
+    for p in paths:
+        if p not in seen:
+            out.append(p)
+            seen.add(p)
+    return out
+
+
+def _infer_label_from_filename(path: str) -> str:
+    """
+    CSIC 2010 típicamente trae:
+      - normalTrafficTraining.txt / normalTrafficTest.txt
+      - anomalousTrafficTest.txt
+    """
+    name = os.path.basename(path).lower()
+
+    # anomalous first (avoid weird overlaps)
+    if ("anomal" in name) or ("attack" in name) or ("anomaly" in name):
+        return "anomalous"
+    if "normal" in name:
+        return "normal"
+
+    # fallback: allow patterns like allNormals / allAnomalies
+    if re.search(r"\bnormals?\b", name):
+        return "normal"
+    if re.search(r"\banomal(?:y|ous|ies)\b", name):
+        return "anomalous"
+
+    raise ValueError(
+        f"No pude inferir label desde el nombre: {path}\n"
+        "Renombrá el archivo para incluir 'normal' o 'anomalous', o usá --label para forzar."
+    )
+
+
+def _infer_split_from_filename(path: str) -> str:
+    name = os.path.basename(path).lower()
+    if "train" in name or "training" in name:
+        return "train"
+    if "test" in name:
+        return "test"
+    return ""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True, help="Path to raw CSIC txt")
-    ap.add_argument("--output", required=True, help="Path to output parquet/csv (features)")
-    ap.add_argument("--label", required=True, choices=["normal", "anomalous"], help="Label for this file")
 
-    ap.add_argument("--sample-n", type=int, default=0, help="If >0, only process first N requests (debug)")
+    # Legacy single-file mode (no rompe lo que ya tenías / lo que está en el libro)
+    ap.add_argument("--input", default=None, help="(legacy) Path a un único CSIC .txt")
+
+    # New multi-file mode
+    ap.add_argument(
+        "--inputs",
+        nargs="+",
+        default=None,
+        help="Uno o más .txt / globs / directorios (si es dir, carga **/*.txt)",
+    )
+
+    ap.add_argument("--output", required=True, help="Path al output parquet/csv (features)")
+
+    # Label policy
+    ap.add_argument(
+        "--label",
+        default=None,
+        choices=["normal", "anomalous"],
+        help="(legacy) requerido con --input. (override) si se usa con --inputs, fuerza ese label para TODOS los archivos.",
+    )
+    ap.add_argument(
+        "--label-prefix",
+        default="CSIC-ANOMALOUS",
+        help="Valor para la clase anómala en label_multiclass/multilabel",
+    )
+
+    ap.add_argument("--sample-n", type=int, default=0, help="Si >0, procesa solo N requests POR ARCHIVO (debug)")
     ap.add_argument("--out-format", default="parquet", choices=["parquet", "csv"])
-    ap.add_argument("--keep-absolute-uri", action="store_true", help="Do NOT strip http://host:port from request line")
-    ap.add_argument("--use-headers", action="store_true", help="Pass parsed headers to feature extractor")
+    ap.add_argument("--keep-absolute-uri", action="store_true", help="NO recortar http://host:port del request line")
+    ap.add_argument("--use-headers", action="store_true", help="Pasar headers parseados al extractor de features")
 
     args = ap.parse_args()
 
-    df = load_csic_txt(args.input, keep_absolute_uri=args.keep_absolute_uri, sample_n=args.sample_n)
-    if df.empty:
-        raise SystemExit(f"No requests parsed from: {args.input}")
+    if (args.input is None and args.inputs is None) or (args.input and args.inputs):
+        raise SystemExit("Usá exactamente UNO: --input (single) o --inputs (multi).")
 
-    df["source_file"] = args.input
-    df = make_labels(df, label=args.label)
+    dfs = []
+
+    if args.input:
+        # Legacy mode: same as before, but we also set label_type_raw + split + dataset_name
+        if not args.label:
+            raise SystemExit("--label es requerido cuando usás --input")
+
+        df = load_csic_txt(args.input, keep_absolute_uri=args.keep_absolute_uri, sample_n=args.sample_n)
+        if df.empty:
+            raise SystemExit(f"No requests parseadas desde: {args.input}")
+
+        df["source_file"] = args.input
+        df["dataset_name"] = "CSIC-2010"
+        df["split"] = _infer_split_from_filename(args.input)
+        df["label_type_raw"] = args.label
+        dfs.append(df)
+
+    else:
+        inputs = _collect_inputs(args.inputs or [])
+        if not inputs:
+            raise SystemExit("No se encontraron inputs. Revisá --inputs (paths/globs/dirs).")
+
+        for p in tqdm(inputs, desc="Loading CSIC txt"):
+            df = load_csic_txt(p, keep_absolute_uri=args.keep_absolute_uri, sample_n=args.sample_n)
+            if df is None or df.empty:
+                continue
+
+            df["source_file"] = p
+            df["dataset_name"] = "CSIC-2010"
+            df["split"] = _infer_split_from_filename(p)
+
+            if args.label:
+                df["label_type_raw"] = args.label
+            else:
+                df["label_type_raw"] = _infer_label_from_filename(p)
+
+            dfs.append(df)
+
+        if not dfs:
+            raise SystemExit("No se parseó ningún request desde los inputs.")
+
+    df_all = pd.concat(dfs, ignore_index=True)
+
+    # Crea: label_binary, label_multiclass, label_multilabel (K=2 para CSIC)
+    df_all = make_labels(df_all, label_prefix=args.label_prefix, label_type_col="label_type_raw")
 
     # Null-safe
-    df["request_http_method"] = df["request_http_method"].fillna("")
-    df["request_http_request"] = df["request_http_request"].fillna("")
-    df["request_body"] = df["request_body"].fillna("")
-    df["request_headers_json"] = df["request_headers_json"].fillna("")
+    df_all["request_http_method"] = df_all["request_http_method"].fillna("")
+    df_all["request_http_request"] = df_all["request_http_request"].fillna("")
+    df_all["request_body"] = df_all["request_body"].fillna("")
+    df_all["request_headers_json"] = df_all["request_headers_json"].fillna("")
 
     tqdm.pandas(desc="Extracting features (CSIC)")
-    feats = df.progress_apply(
+    feats = df_all.progress_apply(
         lambda r: extract_http_features(
             method=str(r["request_http_method"]),
             uri=str(r["request_http_request"]),
@@ -65,7 +197,7 @@ def main() -> None:
     )
 
     feat_df = pd.DataFrame(list(feats))
-    out = pd.concat([df, feat_df], axis=1)
+    out = pd.concat([df_all, feat_df], axis=1)
 
     if args.out_format == "parquet" or args.output.lower().endswith(".parquet"):
         out.to_parquet(args.output, index=False)

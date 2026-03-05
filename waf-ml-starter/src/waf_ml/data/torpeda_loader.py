@@ -110,26 +110,77 @@ def load_torpeda_xml(path: str, *, keep_absolute_uri: bool = False, sample_n: in
     return pd.DataFrame(rows)
 
 
+def _norm_attack_name(s: str) -> str:
+    # Mantener “lo más nativo posible”, pero colapsar whitespace para evitar clases duplicadas por espacios.
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
 def make_labels(
     df: pd.DataFrame,
     *,
-    label_prefix: str = "CSIC-ANOMALOUS",
+    label_prefix: str = "TORPEDA",
     label_type_col: str = "label_type_raw",
+    label_attack_col: str = "label_attack_raw",
 ) -> pd.DataFrame:
-    """Create labels in the same schema as your Harvard/CSIC pipeline."""
+    """
+    Labels (alineado con libro/propuesta):
+      - label_binary: 0 normal / 1 no-normal (anomalous o attack)
+      - label_multiclass (nativo TorpEda):
+          * NORMAL
+          * {PREFIX}-ANOMALOUS
+          * {PREFIX}-{ATTACK_NAME}   (8 tipos de ataque típicos)
+      - label_multilabel: [] para NORMAL, si no-normal => [label_multiclass]
+        (no es multilabel real, pero mantiene el mismo “shape” que el pipeline)
+    """
     if label_type_col not in df.columns:
         raise ValueError(f"Missing '{label_type_col}' column. Columns: {list(df.columns)}")
+    if label_attack_col not in df.columns:
+        raise ValueError(f"Missing '{label_attack_col}' column. Columns: {list(df.columns)}")
 
+    prefix = (label_prefix or "TORPEDA").strip()
     out = df.copy()
 
-    def _is_normal(v) -> bool:
-        return str(v or "").strip().lower() == "normal"
+    typ = out[label_type_col].fillna("").astype(str).str.strip().str.lower()
+    atk = out[label_attack_col].fillna("").astype(str).map(_norm_attack_name)
 
-    is_normal = out[label_type_col].map(_is_normal)
+    is_normal = typ.eq("normal")
+    is_anom = typ.eq("anomalous")
+    is_attack = typ.eq("attack")
 
-    # Treat 'attack' and 'anomalous' the same (anomaly) for OCSVM
+    # Binario (para OCSVM): todo lo no-normal = anomalía/ataque
     out["label_binary"] = (~is_normal).astype(int)
-    out["label_multiclass"] = is_normal.map(lambda x: "NORMAL" if x else label_prefix)
-    out["label_multilabel"] = is_normal.map(lambda x: [] if x else [label_prefix])
+
+    # Multiclase (fiel a TorpEda: normal vs anomalous vs tipo de ataque)
+    label_mc = pd.Series(index=out.index, dtype=object)
+
+    label_mc[is_normal] = "NORMAL"
+    label_mc[is_anom] = f"{prefix}-ANOMALOUS"
+
+    # Para ataques: usar el nombre nativo de <attack> si existe
+    def _attack_label(a: str) -> str:
+        a = _norm_attack_name(a)
+        return f"{prefix}-{a}" if a else f"{prefix}-ATTACK"
+
+    label_mc[is_attack] = atk[is_attack].map(_attack_label)
+
+    # Fallback: tipos inesperados => prefijo + tipo
+    other = ~(is_normal | is_anom | is_attack)
+    if other.any():
+        def _other_label(t: str) -> str:
+            t = (t or "").strip()
+            t = re.sub(r"\s+", " ", t)
+            return f"{prefix}-{t.upper()}" if t else f"{prefix}-UNKNOWN"
+
+        label_mc[other] = typ[other].map(_other_label)
+
+    out["label_multiclass"] = label_mc
+
+    # Multilabel “compat” (lista)
+    out["label_multilabel"] = [
+        [] if lab == "NORMAL" else [lab]
+        for lab in out["label_multiclass"].astype(str).tolist()
+    ]
 
     return out

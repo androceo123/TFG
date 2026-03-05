@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, List, Tuple
+from typing import Dict, Iterator, List, Tuple, Optional
 
 import pandas as pd
 from urllib.parse import urlsplit
@@ -139,26 +139,44 @@ def load_csic_txt(path: str, *, keep_absolute_uri: bool = False, sample_n: int =
     return pd.DataFrame(rows)
 
 
-def make_labels(df: pd.DataFrame, *, label: str) -> pd.DataFrame:
+def make_labels(
+    df: pd.DataFrame,
+    *,
+    label: Optional[str] = None,
+    label_prefix: str = "CSIC-ANOMALOUS",
+    label_type_col: str = "label_type_raw",
+) -> pd.DataFrame:
     """
-    Crea labels en el MISMO formato que tu pipeline:
-      - label_binary: 0 normal / 1 ataque
-      - label_multiclass: "NORMAL" o "CSIC-ANOMALOUS"
-      - label_multilabel: [] o ["CSIC-ANOMALOUS"]
-    """
-    lab = (label or "").strip().lower()
-    if lab not in {"normal", "anomalous"}:
-        raise ValueError("label must be 'normal' or 'anomalous'")
+    Crea labels en el MISMO formato que tu pipeline (K=2 para CSIC 2010):
+      - label_binary: 0 normal / 1 ataque/anómalo
+      - label_multiclass: "NORMAL" o label_prefix (default "CSIC-ANOMALOUS")
+      - label_multilabel: [] o [label_prefix]
 
+    Soporta 2 modos:
+      A) (legacy) pasar label="normal"|"anomalous" y lo aplica a todo el DF.
+      B) pasar un DF con una columna label_type_col (por fila) para concatenar múltiples archivos.
+    """
     out = df.copy()
 
-    if lab == "normal":
-        out["label_binary"] = 0
-        out["label_multiclass"] = "NORMAL"
-        out["label_multilabel"] = [[] for _ in range(len(out))]
-    else:
-        out["label_binary"] = 1
-        out["label_multiclass"] = "CSIC-ANOMALOUS"
-        out["label_multilabel"] = [["CSIC-ANOMALOUS"] for _ in range(len(out))]
+    if label is not None:
+        lab = (label or "").strip().lower()
+        if lab not in {"normal", "anomalous"}:
+            raise ValueError("label must be 'normal' or 'anomalous'")
+        out[label_type_col] = lab
+
+    if label_type_col not in out.columns:
+        raise ValueError(
+            f"Missing '{label_type_col}'. Provide make_labels(..., label='normal'|'anomalous') "
+            f"or add a per-row '{label_type_col}' column before calling make_labels()."
+        )
+
+    def _is_normal(v) -> bool:
+        return str(v or "").strip().lower() == "normal"
+
+    is_normal = out[label_type_col].map(_is_normal)
+
+    out["label_binary"] = (~is_normal).astype(int)
+    out["label_multiclass"] = is_normal.map(lambda x: "NORMAL" if x else label_prefix)
+    out["label_multilabel"] = is_normal.map(lambda x: [] if x else [label_prefix])
 
     return out

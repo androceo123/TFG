@@ -40,7 +40,7 @@ def _collect_inputs(items: list[str]) -> list[str]:
         if os.path.isdir(it):
             paths.extend(sorted(glob.glob(os.path.join(it, "**", "*.xml"), recursive=True)))
         else:
-            # supports globs like data/raw/torpeda/*.xml
+            # supports globs like data/raw/torpeda/**/*.xml
             paths.extend(sorted(glob.glob(it)))
 
     # de-dup, keep order
@@ -69,11 +69,12 @@ def main() -> None:
     ap.add_argument("--keep-absolute-uri", action="store_true", help="Do NOT strip http://host:port (if present)")
     ap.add_argument("--use-headers", action="store_true", help="Pass parsed headers to feature extractor")
 
-    # keep label strings consistent with your CSIC pipeline by default
+    # Prefix para labels TorpEda:
+    #   NORMAL / {PREFIX}-ANOMALOUS / {PREFIX}-{ATTACK_NAME}
     ap.add_argument(
         "--label-prefix",
-        default="CSIC-ANOMALOUS",
-        help="Value to use for anomalous/attack class in label_multiclass/multilabel",
+        default="TORPEDA",
+        help="Prefix used to build TorpEda label_multiclass values (e.g., TORPEDA).",
     )
 
     args = ap.parse_args()
@@ -95,7 +96,7 @@ def main() -> None:
 
     df = pd.concat(dfs, ignore_index=True)
 
-    # Create: label_binary, label_multiclass, label_multilabel
+    # Create: label_binary, label_multiclass, label_multilabel (TorpEda nativo)
     df = make_labels(df, label_prefix=args.label_prefix)
 
     # Null-safe
@@ -104,7 +105,7 @@ def main() -> None:
     df["request_body"] = df["request_body"].fillna("")
     df["request_headers_json"] = df["request_headers_json"].fillna("")
 
-    tqdm.pandas(desc="Extracting features (Torpeda)")
+    tqdm.pandas(desc="Extracting features (TorpEda)")
     feats = df.progress_apply(
         lambda r: extract_http_features(
             method=str(r["request_http_method"]),
