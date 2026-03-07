@@ -33,3 +33,5 @@ logs/
 waf-ml-starter/data/raw/*
 !waf-ml-starter/data/raw/
 !waf-ml-starter/data/raw/.gitkeep
+
+results/
