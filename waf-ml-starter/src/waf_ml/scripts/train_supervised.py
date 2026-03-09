@@ -430,11 +430,20 @@ def _coef_importance_multiclass(pipeline: Pipeline, features: List[str]) -> pd.D
     classes = getattr(lr, "classes_", [f"class_{i}" for i in range(coefs.shape[0])])
     classes = [str(c) for c in classes]
 
-    abs_mean = np.mean(np.abs(coefs), axis=0)
+    # Caso binario en sklearn: coef_ tiene shape (1, n_features) aunque haya 2 clases
+    if coefs.shape[0] == 1 and len(classes) == 2:
+        pos = coefs[0, :]
+        coefs_full = np.vstack([-pos, pos])  # clase 0 y clase 1
+        class_names = classes
+    else:
+        coefs_full = coefs
+        class_names = classes[:coefs.shape[0]]
+
+    abs_mean = np.mean(np.abs(coefs_full), axis=0)
     out = pd.DataFrame({"feature": features, "importance_abs_mean": abs_mean})
 
-    for i, c in enumerate(classes):
-        out[f"coef_{_safe_name(c)}"] = coefs[i, :]
+    for i, c in enumerate(class_names):
+        out[f"coef_{_safe_name(c)}"] = coefs_full[i, :]
 
     return out.sort_values("importance_abs_mean", ascending=False).reset_index(drop=True)
 
