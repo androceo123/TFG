@@ -12,6 +12,7 @@ What this script enforces:
 - supervised tuning via internal CV (bounded random search)
 - train-only fitting of scalers / binarizers / transforms (no leakage)
 - multilabel metrics: Hamming Loss, Jaccard, Exact Match Ratio, F1 micro/macro
+- optional reduced-binary compatibility for datasets whose multilabel column has a single possible positive label
 - per-label analysis + prevalence/cardinality reports before/after split
 - coefficient-based interpretability
 - automatic ablation with/without suspicious-token features
@@ -46,10 +47,13 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
+    balanced_accuracy_score,
+    confusion_matrix,
     f1_score,
     hamming_loss,
     jaccard_score,
     make_scorer,
+    matthews_corrcoef,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -339,10 +343,14 @@ def _encode_with_known_classes(label_lists: Sequence[Sequence[str]], classes: Se
 
 def _label_sets_from_binary_matrix(y: np.ndarray, labels: Sequence[str]) -> List[List[str]]:
     labs = [str(x) for x in labels]
+    arr = np.asarray(y, dtype=int)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
     out: List[List[str]] = []
-    for row in np.asarray(y):
-        idx = np.where(np.asarray(row).astype(int) == 1)[0].tolist()
-        out.append([labs[i] for i in idx])
+    for row in arr:
+        row_arr = np.atleast_1d(np.asarray(row, dtype=int)).reshape(-1)
+        idx = np.where(row_arr == 1)[0].tolist()
+        out.append([labs[i] for i in idx if i < len(labs)])
     return out
 
 
@@ -500,14 +508,74 @@ def _extract_multilabel_scores(estimator: Pipeline, X: pd.DataFrame) -> Optional
         return None
 
 
-def _multilabel_metrics(y_true: np.ndarray, y_pred: np.ndarray, labels: Sequence[str], y_score: Optional[np.ndarray] = None) -> Dict[str, object]:
+def _binary_metrics_from_single_label(y_true: np.ndarray, y_pred: np.ndarray, y_score: Optional[np.ndarray] = None) -> Dict[str, object]:
+    yt = np.asarray(y_true, dtype=int).reshape(-1)
+    yp = np.asarray(y_pred, dtype=int).reshape(-1)
+    labels = [0, 1]
+    tn, fp, fn, tp = confusion_matrix(yt, yp, labels=labels).ravel()
+    specificity = (tn / (tn + fp)) if (tn + fp) > 0 else None
+    fpr = (fp / (fp + tn)) if (fp + tn) > 0 else None
+    fnr = (fn / (fn + tp)) if (fn + tp) > 0 else None
+
+    out: Dict[str, object] = {
+        "accuracy": _safe_float(np.mean(yt == yp)),
+        "balanced_accuracy": _safe_float(balanced_accuracy_score(yt, yp)),
+        "precision": _safe_float(precision_score(yt, yp, zero_division=0)),
+        "recall": _safe_float(recall_score(yt, yp, zero_division=0)),
+        "f1": _safe_float(f1_score(yt, yp, zero_division=0)),
+        "mcc": _safe_float(matthews_corrcoef(yt, yp)),
+        "specificity": _safe_float(specificity),
+        "fpr": _safe_float(fpr),
+        "fnr": _safe_float(fnr),
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tn": int(tn),
+        "support_positive": int(np.sum(yt == 1)),
+        "support_negative": int(np.sum(yt == 0)),
+    }
+
+    if y_score is not None:
+        ys = np.asarray(y_score, dtype=float).reshape(-1)
+        try:
+            if len(np.unique(yt)) >= 2:
+                out["roc_auc"] = _safe_float(roc_auc_score(yt, ys))
+                out["pr_auc"] = _safe_float(average_precision_score(yt, ys))
+            else:
+                out["roc_auc"] = None
+                out["pr_auc"] = None
+        except Exception:
+            out["roc_auc"] = None
+            out["pr_auc"] = None
+
+    return out
+
+
+def _multilabel_metrics(y_true: np.ndarray, y_pred: np.ndarray, labels: Sequence[str], y_score: Optional[np.ndarray] = None, reduced_binary_mode: str = "auto") -> Dict[str, object]:
     yt = np.asarray(y_true, dtype=int)
     yp = np.asarray(y_pred, dtype=int)
     labels_list = [str(x) for x in labels]
 
+    if yt.ndim == 1:
+        yt = yt.reshape(-1, 1)
+    if yp.ndim == 1:
+        yp = yp.reshape(-1, 1)
+
+    effective_binary = False
+    mode = str(reduced_binary_mode or "auto").strip().lower()
+    if mode not in {"auto", "off", "force"}:
+        raise ValueError(f"Unsupported reduced_binary_mode='{reduced_binary_mode}'. Use auto|off|force.")
+    if mode == "force":
+        if yt.shape[1] != 1:
+            raise ValueError("--reduced-binary-mode force requires exactly one label column after train-only fitting.")
+        effective_binary = True
+    elif mode == "auto" and yt.shape[1] == 1:
+        effective_binary = True
+
     metrics: Dict[str, object] = {
         "n": int(len(yt)),
         "labels": labels_list,
+        "effective_problem_type": "binary_reduced" if effective_binary else "multilabel",
         "f1_micro": _safe_float(f1_score(yt, yp, average="micro", zero_division=0)),
         "f1_macro": _safe_float(f1_score(yt, yp, average="macro", zero_division=0)),
         "precision_micro": _safe_float(precision_score(yt, yp, average="micro", zero_division=0)),
@@ -517,11 +585,14 @@ def _multilabel_metrics(y_true: np.ndarray, y_pred: np.ndarray, labels: Sequence
         "hamming_loss": _safe_float(hamming_loss(yt, yp)),
         "jaccard_micro": _safe_float(jaccard_score(yt, yp, average="micro", zero_division=0)),
         "jaccard_macro": _safe_float(jaccard_score(yt, yp, average="macro", zero_division=0)),
-        "jaccard_samples": _safe_float(jaccard_score(yt, yp, average="samples", zero_division=0)),
+        "jaccard_samples": None if effective_binary else _safe_float(jaccard_score(yt, yp, average="samples", zero_division=0)),
         "exact_match_ratio": _safe_float(subset_accuracy_score(yt, yp)),
         "cardinality_true": _cardinality_stats(yt, len(labels_list)),
         "cardinality_pred": _cardinality_stats(yp, len(labels_list)),
     }
+    if effective_binary:
+        score_col = None if y_score is None else np.asarray(y_score, dtype=float).reshape(-1, 1)[:, 0]
+        metrics["binary_metrics"] = _binary_metrics_from_single_label(yt[:, 0], yp[:, 0], score_col)
 
     labelwise: List[Dict[str, object]] = []
     for i, lab in enumerate(labels_list):
@@ -589,10 +660,19 @@ def _multilabel_metrics(y_true: np.ndarray, y_pred: np.ndarray, labels: Sequence
 def _print_multilabel_metrics(metrics: Dict[str, object], *, title: str) -> None:
     print(f"=== {title} ===")
     print(f"N:                 {metrics.get('n')}")
+    print(f"Problem type:      {metrics.get('effective_problem_type')}")
     print(f"F1 micro/macro:    {metrics.get('f1_micro')} / {metrics.get('f1_macro')}")
     print(f"Hamming loss:      {metrics.get('hamming_loss')}")
     print(f"Jaccard micro/mac: {metrics.get('jaccard_micro')} / {metrics.get('jaccard_macro')}")
+    if metrics.get('jaccard_samples') is not None:
+        print(f"Jaccard samples:   {metrics.get('jaccard_samples')}")
     print(f"Exact match:       {metrics.get('exact_match_ratio')}")
+    if metrics.get('effective_problem_type') == 'binary_reduced':
+        bm = metrics.get('binary_metrics') or {}
+        print(f"Accuracy / BalAcc: {bm.get('accuracy')} / {bm.get('balanced_accuracy')}")
+        print(f"Precision/Recall:  {bm.get('precision')} / {bm.get('recall')}")
+        print(f"Specificity:       {bm.get('specificity')}")
+        print(f"MCC:               {bm.get('mcc')}")
 
 
 # -----------------------------------------------------------------------------
@@ -1037,7 +1117,7 @@ def _run_single_experiment(
 
     y_pred = estimator.predict(x_test)
     y_score = _extract_multilabel_scores(estimator, x_test)
-    metrics = _multilabel_metrics(y_test, y_pred, model_labels, y_score=y_score)
+    metrics = _multilabel_metrics(y_test, y_pred, model_labels, y_score=y_score, reduced_binary_mode=args.reduced_binary_mode)
     _print_multilabel_metrics(metrics, title=f"Test evaluation ({tag})")
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -1078,27 +1158,38 @@ def _run_single_experiment(
         "tuning": tune_summary,
         "split_summary": split_summary,
         "model_label_vocabulary": model_labels,
+        "reduced_binary_mode": str(args.reduced_binary_mode),
         "excluded_unseen_test_labels": unseen_test,
         "train_time_seconds": float(train_time_seconds),
         "evaluation": metrics,
     }
 
     if pred_out:
-        true_sets = _label_sets_from_binary_matrix(y_test, model_labels)
-        pred_sets = _label_sets_from_binary_matrix(y_pred, model_labels)
+        y_test_arr = np.asarray(y_test, dtype=int)
+        y_pred_arr = np.asarray(y_pred, dtype=int)
+        if y_test_arr.ndim == 1:
+            y_test_arr = y_test_arr.reshape(-1, 1)
+        if y_pred_arr.ndim == 1:
+            y_pred_arr = y_pred_arr.reshape(-1, 1)
+        y_score_arr = None if y_score is None else np.asarray(y_score)
+        if y_score_arr is not None and y_score_arr.ndim == 1:
+            y_score_arr = y_score_arr.reshape(-1, 1)
+
+        true_sets = _label_sets_from_binary_matrix(y_test_arr, model_labels)
+        pred_sets = _label_sets_from_binary_matrix(y_pred_arr, model_labels)
         pred_df = pd.DataFrame({
             "row_index": test_idx,
-            "n_labels_true": y_test.sum(axis=1),
-            "n_labels_pred": y_pred.sum(axis=1),
+            "n_labels_true": y_test_arr.sum(axis=1),
+            "n_labels_pred": y_pred_arr.sum(axis=1),
             "true_labels": [json.dumps(v, ensure_ascii=False) for v in true_sets],
             "pred_labels": [json.dumps(v, ensure_ascii=False) for v in pred_sets],
         })
         for i, lab in enumerate(model_labels):
             tag_lab = _safe_name(lab)
-            pred_df[f"true_{tag_lab}"] = y_test[:, i].astype(int)
-            pred_df[f"pred_{tag_lab}"] = y_pred[:, i].astype(int)
-            if y_score is not None and y_score.shape[1] > i:
-                pred_df[f"score_{tag_lab}"] = y_score[:, i]
+            pred_df[f"true_{tag_lab}"] = y_test_arr[:, i].astype(int)
+            pred_df[f"pred_{tag_lab}"] = y_pred_arr[:, i].astype(int)
+            if y_score_arr is not None and y_score_arr.shape[1] > i:
+                pred_df[f"score_{tag_lab}"] = y_score_arr[:, i]
         _save_table(pred_df, pred_out)
         print(f"Saved predictions: {pred_out}")
 
@@ -1149,9 +1240,10 @@ def _run_single_experiment(
 # -----------------------------------------------------------------------------
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Train thesis-aligned multilabel OvR Logistic Regression on Harvard/SR-BH WAF features")
+    ap = argparse.ArgumentParser(description="Train thesis-aligned multilabel OvR Logistic Regression on Harvard/SR-BH WAF features with optional reduced-binary compatibility")
     ap.add_argument("--data", required=True)
     ap.add_argument("--label-col", default="label_multilabel")
+    ap.add_argument("--reduced-binary-mode", default="auto", choices=["auto", "off", "force"], help="Compatibility mode for datasets whose multilabel column reduces to a single positive label (e.g., CSIC). Harvard/SR-BH remains unchanged under auto unless only one train-time label exists.")
     ap.add_argument("--out", required=True)
     ap.add_argument("--test-size", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=42)
