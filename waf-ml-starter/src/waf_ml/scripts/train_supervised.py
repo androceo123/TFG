@@ -23,6 +23,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -637,6 +638,57 @@ def _percentiles_ms(values: List[float]) -> Dict[str, Optional[float]]:
     }
 
 
+def _predict_one_benchmark_supervised(estimator: Pipeline, row: pd.Series, features: List[str], use_full_pipeline: bool) -> Tuple[Optional[float], Optional[float], Optional[float], bool]:
+    t0 = time.perf_counter_ns()
+    t1 = t0
+    try:
+        if use_full_pipeline:
+            x_one = _features_from_raw_row(row, features)
+            t1 = time.perf_counter_ns()
+        else:
+            x_one = pd.DataFrame([{c: row.get(c, 0) for c in features}])
+        x_one = x_one[features].fillna(0).astype(np.float32)
+        _ = estimator.predict(x_one)
+        try:
+            _ = estimator.predict_proba(x_one)
+        except Exception:
+            pass
+        t2 = time.perf_counter_ns()
+        return (t2 - t0) / 1e6, (t1 - t0) / 1e6, (t2 - t1) / 1e6, True
+    except Exception:
+        return None, None, None, False
+
+
+def _benchmark_load_profiles_supervised(estimator: Pipeline, df_bench: pd.DataFrame, features: List[str], *, use_full_pipeline: bool, levels: List[int], max_rows: int) -> List[Dict[str, object]]:
+    if len(df_bench) == 0 or not levels:
+        return []
+    rows = df_bench.head(min(len(df_bench), int(max_rows))).reset_index(drop=True)
+    profiles: List[Dict[str, object]] = []
+    for workers in sorted({max(1, int(x)) for x in levels}):
+        lat_ms: List[float] = []
+        ok = 0
+        t0 = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = [ex.submit(_predict_one_benchmark_supervised, estimator, row, features, use_full_pipeline) for _, row in rows.iterrows()]
+            for fut in as_completed(futs):
+                total_ms, _, _, success = fut.result()
+                if success and total_ms is not None:
+                    ok += 1
+                    lat_ms.append(float(total_ms))
+        wall = time.perf_counter() - t0
+        profiles.append({
+            "concurrency": int(workers),
+            "requests": int(len(rows)),
+            "successful_requests": int(ok),
+            "failure_rate": _safe_float((len(rows) - ok) / len(rows)) if len(rows) else None,
+            "throughput_req_per_sec": _safe_float(ok / wall) if wall > 0 else None,
+            "latency_total": _percentiles_ms(lat_ms),
+            "wall_time_seconds": _safe_float(wall),
+            "note": "Approximate threaded load profile for feasibility, not a full networked WAF stress test.",
+        })
+    return profiles
+
+
 def _benchmark_supervised(
     estimator: Pipeline,
     df: pd.DataFrame,
@@ -646,6 +698,9 @@ def _benchmark_supervised(
     benchmark_max_rows: int,
     benchmark_warmup_rows: int,
     benchmark_repeats: int,
+    benchmark_load_levels: List[int],
+    benchmark_load_rows: int,
+    require_resource_metrics: bool,
     seed: int,
     model_path: Optional[str],
     train_time_seconds: Optional[float],
@@ -673,6 +728,11 @@ def _benchmark_supervised(
     infer_lat_ms: List[float] = []
     failures = 0
 
+    if require_resource_metrics and psutil is None:
+        return {"enabled": False, "reason": "psutil_not_available"}
+    if require_resource_metrics and resource is None:
+        return {"enabled": False, "reason": "resource_not_available"}
+
     proc = psutil.Process(os.getpid()) if psutil is not None else None
     cpu_before = proc.cpu_times() if proc is not None else None
     rss_before = proc.memory_info().rss / (1024 ** 2) if proc is not None else None
@@ -680,26 +740,12 @@ def _benchmark_supervised(
 
     def _run_one(row: pd.Series) -> None:
         nonlocal failures
-        t0 = time.perf_counter_ns()
-        t1 = t0
-        try:
-            if use_full_pipeline:
-                X_one = _features_from_raw_row(row, features)
-                t1 = time.perf_counter_ns()
-            else:
-                X_one = pd.DataFrame([{c: row.get(c, 0) for c in features}])
-                t1 = t0
-            X_one = X_one[features].fillna(0)
-            _ = estimator.predict(X_one)
-            try:
-                _ = estimator.predict_proba(X_one)
-            except Exception:
-                pass
-            t2 = time.perf_counter_ns()
-            extract_lat_ms.append((t1 - t0) / 1e6)
-            infer_lat_ms.append((t2 - t1) / 1e6)
-            total_lat_ms.append((t2 - t0) / 1e6)
-        except Exception:
+        total_ms, extract_ms, infer_ms, success = _predict_one_benchmark_supervised(estimator, row, features, use_full_pipeline)
+        if success and total_ms is not None and extract_ms is not None and infer_ms is not None:
+            total_lat_ms.append(float(total_ms))
+            extract_lat_ms.append(float(extract_ms))
+            infer_lat_ms.append(float(infer_ms))
+        else:
             failures += 1
 
     if warmup_n > 0:
@@ -737,6 +783,28 @@ def _benchmark_supervised(
         except Exception:
             model_size_bytes = None
 
+    peak_rss = _safe_float(peak_after if peak_after is not None else peak_before)
+    rss_before_safe = _safe_float(rss_before)
+    rss_after_safe = _safe_float(rss_after)
+    if require_resource_metrics and (cpu_util is None or rss_before_safe is None or rss_after_safe is None or peak_rss is None):
+        return {
+            "enabled": False,
+            "reason": "required_resource_metrics_unavailable",
+            "cpu_utilization_pct_approx": _safe_float(cpu_util),
+            "rss_mb_before": rss_before_safe,
+            "rss_mb_after": rss_after_safe,
+            "peak_rss_mb_approx": peak_rss,
+        }
+
+    load_profiles = _benchmark_load_profiles_supervised(
+        estimator,
+        df_bench,
+        features,
+        use_full_pipeline=use_full_pipeline,
+        levels=benchmark_load_levels,
+        max_rows=benchmark_load_rows,
+    )
+
     return {
         "enabled": True,
         "mode": "feature_extraction_plus_inference" if use_full_pipeline else "inference_only",
@@ -751,14 +819,14 @@ def _benchmark_supervised(
         "latency_feature_extraction": _percentiles_ms(extract_lat_ms),
         "latency_inference": _percentiles_ms(infer_lat_ms),
         "cpu_utilization_pct_approx": cpu_util,
-        "rss_mb_before": _safe_float(rss_before),
-        "rss_mb_after": _safe_float(rss_after),
-        "peak_rss_mb_approx": _safe_float(peak_after if peak_after is not None else peak_before),
+        "rss_mb_before": rss_before_safe,
+        "rss_mb_after": rss_after_safe,
+        "peak_rss_mb_approx": peak_rss,
         "model_size_bytes": model_size_bytes,
         "train_time_seconds": _safe_float(train_time_seconds),
         "wall_time_seconds": _safe_float(wall_elapsed),
+        "load_profiles": load_profiles,
     }
-
 
 def _print_benchmark(bench: Dict[str, object], *, title: str) -> None:
     if not bench.get("enabled"):
@@ -989,6 +1057,9 @@ def main() -> None:
     ap.add_argument("--benchmark-max-rows", type=int, default=2000)
     ap.add_argument("--benchmark-warmup-rows", type=int, default=100)
     ap.add_argument("--benchmark-repeats", type=int, default=1)
+    ap.add_argument("--benchmark-load-levels", default="1,2,4")
+    ap.add_argument("--benchmark-load-rows", type=int, default=300)
+    ap.add_argument("--require-resource-metrics", action="store_true", help="Fail the run if CPU/RAM benchmark metrics cannot be measured.")
     ap.add_argument("--benchmark-out", default=None)
 
     args = ap.parse_args()
@@ -1027,7 +1098,12 @@ def main() -> None:
 
         base_pipe = _build_multiclass_pipe(args)
         estimator: Pipeline = base_pipe
-        tune_summary: Dict[str, object] = {"enabled": args.tune != "none", "mode": args.tune, "selection_metric": "f1_weighted"}
+        tune_summary: Dict[str, object] = {
+            "enabled": args.tune != "none",
+            "mode": args.tune,
+            "selection_metric": "f1_weighted",
+            "tuning_time_seconds": None,
+        }
 
         if args.tune != "none":
             X_tune, y_tune = _maybe_cap_tune_sample(X_train, y_train, args.tune_sample_n, args.seed)
@@ -1045,11 +1121,19 @@ def main() -> None:
                 seed=args.seed,
                 factor=args.tune_factor,
             )
+            tune_t0 = time.perf_counter()
             search.fit(X_tune, y_tune)
+            tuning_time_seconds = time.perf_counter() - tune_t0
             best_params = dict(search.best_params_)
             print(f"[TUNE] best_params={best_params}")
             print(f"[TUNE] best_score={search.best_score_}")
-            tune_summary.update({"best_params": best_params, "best_score": _safe_float(search.best_score_), "cv": int(args.cv)})
+            print(f"[TUNE] tuning_time_seconds={tuning_time_seconds:.6f}")
+            tune_summary.update({
+                "best_params": best_params,
+                "best_score": _safe_float(search.best_score_),
+                "cv": int(args.cv),
+                "tuning_time_seconds": float(tuning_time_seconds),
+            })
             if args.tune_results_out:
                 os.makedirs(os.path.dirname(args.tune_results_out) or ".", exist_ok=True)
                 pd.DataFrame(search.cv_results_).to_csv(args.tune_results_out, index=False)
@@ -1102,6 +1186,7 @@ def main() -> None:
             "features_dropped": [f for f in DEFAULT_FEATURES if f not in features],
             "suspicious_token_ablation": sorted([f for f in SUSPICIOUS_TOKEN_FEATURES if f not in features]),
             "tuning": tune_summary,
+            "tuning_time_seconds": _safe_float(tune_summary.get("tuning_time_seconds")),
             "train_time_seconds": float(train_time_seconds),
             "evaluation": metrics,
         }
@@ -1157,6 +1242,9 @@ def main() -> None:
             benchmark_max_rows=args.benchmark_max_rows,
             benchmark_warmup_rows=args.benchmark_warmup_rows,
             benchmark_repeats=args.benchmark_repeats,
+            benchmark_load_levels=[int(x) for x in _parse_csv_list(args.benchmark_load_levels)] if args.benchmark_load_levels else [],
+            benchmark_load_rows=args.benchmark_load_rows,
+            require_resource_metrics=args.require_resource_metrics,
             seed=args.seed,
             model_path=args.out,
             train_time_seconds=train_time_seconds,
@@ -1181,7 +1269,12 @@ def main() -> None:
 
     base_pipe = _build_multilabel_pipe(args)
     estimator: Pipeline = base_pipe
-    tune_summary: Dict[str, object] = {"enabled": args.tune != "none", "mode": args.tune, "selection_metric": "f1_micro"}
+    tune_summary: Dict[str, object] = {
+        "enabled": args.tune != "none",
+        "mode": args.tune,
+        "selection_metric": "f1_micro",
+        "tuning_time_seconds": None,
+    }
 
     if args.tune != "none":
         X_tune, Y_tune = _maybe_cap_tune_sample(X_train, Y_train, args.tune_sample_n, args.seed)
@@ -1199,11 +1292,19 @@ def main() -> None:
             seed=args.seed,
             factor=args.tune_factor,
         )
+        tune_t0 = time.perf_counter()
         search.fit(X_tune, Y_tune)
+        tuning_time_seconds = time.perf_counter() - tune_t0
         best_params = dict(search.best_params_)
         print(f"[TUNE] best_params={best_params}")
         print(f"[TUNE] best_score={search.best_score_}")
-        tune_summary.update({"best_params": best_params, "best_score": _safe_float(search.best_score_), "cv": int(args.cv)})
+        print(f"[TUNE] tuning_time_seconds={tuning_time_seconds:.6f}")
+        tune_summary.update({
+            "best_params": best_params,
+            "best_score": _safe_float(search.best_score_),
+            "cv": int(args.cv),
+            "tuning_time_seconds": float(tuning_time_seconds),
+        })
         if args.tune_results_out:
             os.makedirs(os.path.dirname(args.tune_results_out) or ".", exist_ok=True)
             pd.DataFrame(search.cv_results_).to_csv(args.tune_results_out, index=False)
@@ -1249,6 +1350,7 @@ def main() -> None:
         "features_dropped": [f for f in DEFAULT_FEATURES if f not in features],
         "suspicious_token_ablation": sorted([f for f in SUSPICIOUS_TOKEN_FEATURES if f not in features]),
         "tuning": tune_summary,
+        "tuning_time_seconds": _safe_float(tune_summary.get("tuning_time_seconds")),
         "train_time_seconds": float(train_time_seconds),
         "evaluation": metrics,
     }

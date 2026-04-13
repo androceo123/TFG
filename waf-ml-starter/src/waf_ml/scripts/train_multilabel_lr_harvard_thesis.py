@@ -764,6 +764,7 @@ def _benchmark_supervised(
     benchmark_repeats: int,
     benchmark_load_levels: List[int],
     benchmark_load_rows: int,
+    require_resource_metrics: bool,
     seed: int,
     model_path: Optional[str],
     train_time_seconds: Optional[float],
@@ -790,6 +791,11 @@ def _benchmark_supervised(
     extract_lat_ms: List[float] = []
     infer_lat_ms: List[float] = []
     failures = 0
+
+    if require_resource_metrics and psutil is None:
+        return {"enabled": False, "reason": "psutil_not_available"}
+    if require_resource_metrics and resource is None:
+        return {"enabled": False, "reason": "resource_not_available"}
 
     proc = psutil.Process(os.getpid()) if psutil is not None else None
     cpu_before = proc.cpu_times() if proc is not None else None
@@ -841,6 +847,19 @@ def _benchmark_supervised(
         except Exception:
             model_size_bytes = None
 
+    peak_rss = _safe_float(peak_after if peak_after is not None else peak_before)
+    rss_before_safe = _safe_float(rss_before)
+    rss_after_safe = _safe_float(rss_after)
+    if require_resource_metrics and (cpu_util is None or rss_before_safe is None or rss_after_safe is None or peak_rss is None):
+        return {
+            "enabled": False,
+            "reason": "required_resource_metrics_unavailable",
+            "cpu_utilization_pct_approx": _safe_float(cpu_util),
+            "rss_mb_before": rss_before_safe,
+            "rss_mb_after": rss_after_safe,
+            "peak_rss_mb_approx": peak_rss,
+        }
+
     load_profiles = _benchmark_load_profiles(
         estimator,
         df_bench,
@@ -864,9 +883,9 @@ def _benchmark_supervised(
         "latency_feature_extraction": _percentiles_ms(extract_lat_ms),
         "latency_inference": _percentiles_ms(infer_lat_ms),
         "cpu_utilization_pct_approx": cpu_util,
-        "rss_mb_before": _safe_float(rss_before),
-        "rss_mb_after": _safe_float(rss_after),
-        "peak_rss_mb_approx": _safe_float(peak_after if peak_after is not None else peak_before),
+        "rss_mb_before": rss_before_safe,
+        "rss_mb_after": rss_after_safe,
+        "peak_rss_mb_approx": peak_rss,
         "model_size_bytes": model_size_bytes,
         "train_time_seconds": _safe_float(train_time_seconds),
         "wall_time_seconds": _safe_float(wall_elapsed),
@@ -1013,7 +1032,8 @@ def _run_cv_tuning(args, x_train: pd.DataFrame, y_train: np.ndarray) -> Tuple[Di
     )
     t0 = time.perf_counter()
     search.fit(x_tune, y_tune)
-    print(f"[TUNE] cv_search_seconds={time.perf_counter() - t0:.2f}")
+    cv_search_seconds = time.perf_counter() - t0
+    print(f"[TUNE] cv_search_seconds={cv_search_seconds:.2f}")
     best_params = dict(search.best_params_)
     tune_summary = {
         "enabled": True,
@@ -1029,6 +1049,7 @@ def _run_cv_tuning(args, x_train: pd.DataFrame, y_train: np.ndarray) -> Tuple[Di
         "best_params": best_params,
         "best_score": _safe_float(search.best_score_),
         "subtrain_rows": int(len(x_tune)),
+        "tuning_time_seconds": float(cv_search_seconds),
     }
     return best_params, tune_summary, pd.DataFrame(search.cv_results_)
 
@@ -1104,6 +1125,7 @@ def _run_single_experiment(
         "selection_metric": "f1_micro",
         "protocol": "cv" if args.tune != "none" else None,
         "tune_sample_n": int(args.tune_sample_n),
+        "tuning_time_seconds": None,
     }
 
     if args.tune != "none":
@@ -1160,6 +1182,7 @@ def _run_single_experiment(
         "model_label_vocabulary": model_labels,
         "reduced_binary_mode": str(args.reduced_binary_mode),
         "excluded_unseen_test_labels": unseen_test,
+        "tuning_time_seconds": _safe_float(tune_summary.get("tuning_time_seconds")),
         "train_time_seconds": float(train_time_seconds),
         "evaluation": metrics,
     }
@@ -1212,10 +1235,13 @@ def _run_single_experiment(
         benchmark_repeats=args.benchmark_repeats,
         benchmark_load_levels=[int(x) for x in _parse_csv_list(args.benchmark_load_levels)] if args.benchmark_load_levels else [],
         benchmark_load_rows=args.benchmark_load_rows,
+        require_resource_metrics=args.require_resource_metrics,
         seed=args.seed,
         model_path=out_path,
         train_time_seconds=train_time_seconds,
     )
+    if args.require_resource_metrics and not bench_payload.get("enabled"):
+        raise RuntimeError(f"Required benchmark resource metrics are missing: {bench_payload.get('reason')}")
     _print_benchmark(bench_payload, title=f"Benchmark ({tag})")
 
     _save_json(metrics_payload, metrics_out)
@@ -1285,6 +1311,7 @@ def main() -> None:
     ap.add_argument("--benchmark-repeats", type=int, default=1)
     ap.add_argument("--benchmark-load-levels", default="1,2,4")
     ap.add_argument("--benchmark-load-rows", type=int, default=400)
+    ap.add_argument("--require-resource-metrics", action="store_true", help="Fail the run if CPU/RAM benchmark metrics cannot be measured.")
 
     ap.add_argument("--run-suspicious-ablation", action="store_true")
     ap.add_argument("--ablation-retune", action="store_true")

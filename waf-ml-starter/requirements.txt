@@ -8,4 +8,5 @@ fastapi==0.127.1
 uvicorn==0.40.0
 python-multipart==0.0.21
 pyarrow==22.0.0
+psutil==7.2.2
 -e .
