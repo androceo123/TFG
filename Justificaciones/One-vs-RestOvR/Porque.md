@@ -295,7 +295,7 @@ Para respaldar esta justificación en la tesis, conviene citar trabajos clásico
 
 Referencias útiles:
 
-- Rifkin & Klautau, *In Defense of One-Vs-All Classification*
-- Tsoumakas & Katakis, *Multi-Label Classification: An Overview*
-- documentación oficial de `scikit-learn` sobre `OneVsRestClassifier`
-- documentación de `scikit-learn` sobre métricas multilabel
+- Rifkin & Klautau, *In Defense of One-Vs-All Classification*: https://www.jmlr.org/papers/volume5/rifkin04a/rifkin04a.pdf
+- Tsoumakas & Katakis, *Multi-Label Classification: An Overview*: https://link.springer.com/chapter/10.1007/978-0-387-30424-3_12
+- documentación oficial de `scikit-learn` sobre `OneVsRestClassifier`: https://scikit-learn.org/stable/modules/generated/sklearn.multiclass.OneVsRestClassifier.html
+- documentación de `scikit-learn` sobre métricas multilabel: https://scikit-learn.org/stable/modules/model_evaluation.html#multilabel-ranking-metrics
