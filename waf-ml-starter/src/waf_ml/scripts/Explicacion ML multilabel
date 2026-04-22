@@ -1,0 +1,209 @@
+## AI Assistant
+Qué hace exactamente
+El script train_multilabel_lr_harvard_thesis.py toma un dataset ya procesado de
+SR-BH / Harvard y hace esto:
+lee el dataset procesado
+extrae la columna multilabel
+convierte las listas de etiquetas a formato binario
+toma las features HTTP numéricas
+entrena un modelo supervisado multilabel
+evalúa resultados
+guarda modelo, métricas, predicciones y benchmark
+opcionalmente hace una ablación quitando tokens sospechosos
+
+En qué etapa del flujo está
+Este script está en la etapa de:
+Modelado + evaluación
+O sea, va después de:
+cargar el dataset crudo
+normalizarlo
+generar label_multilabel
+extraer features HTTP
+Y va antes de:
+análisis de resultados
+redacción de conclusiones
+comparación con otros enfoques
+
+Flujo completo multilabel en el proyecto
+1) Dataset crudo
+SR-BH / Harvard en CSV/TSV.
+2) Loader
+Se usa para:
+leer el archivo
+detectar columnas
+construir etiquetas
+3) Feature engineering
+Se calculan las features HTTP manuales.
+4) Dataset procesado
+Queda una tabla lista para ML.
+5) Este script
+Entrena y evalúa el modelo multilabel.
+
+Qué pasa internamente en este script
+A. Lee el dataset procesado
+Carga el archivo .parquet o .csv que ya tiene:
+features
+label_multilabel
+otras columnas de soporte
+B. Extrae las etiquetas multilabel
+Toma cada fila y convierte la lista de etiquetas en una representación binaria.
+Ejemplo:
+etiquetas posibles: ["CAPEC-66", "CAPEC-126", "CAPEC-34"]
+fila 1: ["CAPEC-66", "CAPEC-126"]
+fila 2: ["CAPEC-34"]
+Eso se transforma a algo como:
+fila 1 → [1, 1, 0]
+fila 2 → [0, 0, 1]
+C. Separa train/test
+Usa un split externo fijo, normalmente 80/20.
+D. Construye el modelo
+La pipeline es:
+StandardScaler
+OneVsRestClassifier
+LogisticRegression
+E. Entrena
+Cada etiqueta se aprende como un problema binario independiente.
+F. Evalúa
+Calcula métricas multilabel como:
+F1 micro
+F1 macro
+Hamming Loss
+Jaccard
+Exact Match Ratio
+G. Guarda resultados
+Guarda:
+modelo .joblib
+métricas .json
+predicciones .csv
+benchmark .json
+importancia de variables
+H. Opcional: ablación
+Puede correr otra versión sin tokens sospechosos para comparar.
+
+Qué produce este script
+Salidas principales
+1. Modelo entrenado
+Archivo .joblib
+2. Métricas
+Archivo .json
+3. Predicciones
+Archivo .csv
+4. Benchmark
+Archivo .json
+5. Importancia de features
+Archivo .csv
+6. Comparación base vs ablación
+Archivo .json
+
+Qué NO hace este script
+Este script no:
+carga el raw directamente
+construye el dataset completo desde cero
+entrena OCSVM
+hace detección one-class
+Eso pertenece a otras etapas o scripts.
+
+Qué relación tiene con OvR
+Este script es justamente la implementación práctica de la idea que discutimos:
+un clasificador por etiqueta
+regresión logística
+formulación multilabel
+interpretabilidad por coeficientes
+O sea, es la parte operacional de la justificación teórica de OvR.
+
+Entonces, resumido en una frase
+Este script es el que toma el dataset SR-BH / Harvard ya procesado y entrena el modelo multilabel final usando OvR + Logistic Regression, evaluándolo y guardando resultados.
+
+Si quieres entenderlo por capas
+Te lo puedo desglosar ahora en 3 niveles:
+qué entra
+qué transforma
+qué sale
+o si prefieres, te puedo guiar archivo por archivo en el flujo completo de SR-BH / Harvard:
+raw
+loader
+features
+entrenamiento
+resultados
+Si quieres, seguimos con eso y te digo exactamente qué comando ejecutar primero.
+
+## Me
+Osea el usa 3 clasificadores?
+
+## AI Assistant
+
+No exactamente. No usa “3 clasificadores” por defecto.
+Lo correcto es:
+One-vs-Rest usa 1 clasificador por cada etiqueta
+Si tu conjunto multilabel tiene:
+3 etiquetas, entonces sí → 3 clasificadores
+10 etiquetas → 10 clasificadores
+20 etiquetas → 20 clasificadores
+En tu caso con
+SR-BH / Harvard, normalmente hay muchas etiquetas CAPEC, así que el modelo entrena un clasificador binario por cada CAPEC que aparezca en el train.
+
+Cómo funciona en tu script
+El script:
+mira todas las etiquetas presentes en label_multilabel
+construye el vocabulario de etiquetas
+entrena un clasificador binario para cada una
+cada clasificador responde:
+esta etiqueta sí
+esta etiqueta no
+
+Ejemplo simple
+Si el train tiene estas 4 etiquetas:
+CAPEC-66
+CAPEC-126
+CAPEC-34
+CAPEC-242
+entonces OvR entrena 4 clasificadores.
+
+Entonces, ¿de dónde sale la idea de “3”?
+Probablemente de que en tu tesis comparan 3 enfoques:
+one-class
+multiclass
+multilabel
+Pero eso no significa que multilabel tenga 3 clasificadores.
+Eso son 3 formulaciones / 3 modelos experimentales, no 3 clasificadores internos.
+
+Resumen corto
+Multilabel con OvR = un clasificador por etiqueta
+No son 3 en general
+En SR-BH / Harvard, probablemente son muchos, porque hay varias CAPEC
+Si quieres, te explico ahora cómo decide el script cuántas etiquetas hay y cómo genera la matriz binaria paso a paso.
+
+## Me
+Que ML usa el clasificador
+
+## AI Assistant
+
+El clasificador usa Machine Learning supervisado clásico, concretamente:
+Regresión Logística en esquema One-vs-Rest (OvR)
+En la práctica:
+modelo base: LogisticRegression
+estrategia multilabel: OneVsRestClassifier
+preprocesamiento: StandardScaler
+
+Qué tipo de ML es eso
+Es un enfoque de:
+clasificación supervisada
+modelo lineal
+aprendizaje discriminativo
+multietiqueta por descomposición binaria
+
+Cómo funciona conceptualmente
+Para cada etiqueta CAPEC:
+se crea un problema binario
+el modelo aprende:
+presente
+ausente
+luego se combinan todas las salidas para formar la predicción multilabel
+
+Qué no es
+No es:
+red neuronal
+árbol de decisión
+random forest
+SVM multilabel directo
+OCSVM
