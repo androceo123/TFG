@@ -259,10 +259,18 @@ Además, usamos:
 \end{itemize}
 
 \subsection{Tabla de símbolos (resumen)}
-\begin{longtable}{@{}ll@{}}
+{\footnotesize
+\renewcommand{\arraystretch}{1.1}
+\begin{longtable}{@{}L{3.6cm}L{11.6cm}@{}}
 \toprule
 \textbf{Símbolo} & \textbf{Significado exacto} \\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Símbolo} & \textbf{Significado exacto} \\
+\midrule
+\endhead
+\multicolumn{2}{@{}l}{\textit{Dataset y dimensiones}}\\
 $n$ & cantidad total de requests del dataset \\
 $d$ & cantidad de features numéricas por request \\
 $K$ & cantidad de clases en multiclase \\
@@ -273,11 +281,69 @@ $y_i$ & etiqueta (binaria o multiclase) de la request $i$ \\
 $y \in \{0,1\}^n$ & vector de etiquetas binarias de todas las requests \\
 $y \in \{1,\dots,K\}^n$ & vector de etiquetas multiclase de todas las requests \\
 $y_i \in \{0,1\}^L$ & vector de etiquetas (multietiqueta) para la request $i$ \\
+$y_{i\ell}$ & componente $\ell$ del vector multietiqueta de la request $i$ \\
 $Y \in \{0,1\}^{n\times L}$ & matriz multietiqueta para todo el dataset \\
 $\hat{y}, \hat{Y}$ & predicciones del modelo \\
 $\ind[\cdot]$ & función indicadora \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Detector one-class}}\\
+$f(x)$ & función de decisión del detector one-class \\
+$z(x)$ & transformación de $x$ al espacio inducido por el kernel \\
+$w$ & vector de pesos que define la orientación de la frontera \\
+$\rho$ & umbral de separación de la frontera one-class \\
+$\operatorname{sign}(\cdot)$ & función signo aplicada a la puntuación de normalidad \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Regresión logística (binaria y multiclase)}}\\
+$z$ & puntaje lineal $z=w^\top x + b$ \\
+$b$ & sesgo (intercepto) del modelo lineal \\
+$\sigma(z)$ & función sigmoide, $\sigma(z)=1/(1+e^{-z})$ \\
+$P(y=1\mid x)$ & probabilidad estimada de la clase positiva \\
+$p_i$ & probabilidad estimada $P(y=1\mid x_i)$ para la request $i$ \\
+$\mathcal{L}(w,b)$ & función de pérdida (log-loss / entropía cruzada) \\
+$\lambda$ & coeficiente de regularización $L_2$ \\
+$\lVert w\rVert^2$ & norma euclídea al cuadrado del vector de pesos \\
+$s_k(x)$ & puntaje lineal de la clase $k$: $s_k(x)=w_k^\top x + b_k$ \\
+$w_k,\ b_k$ & pesos y sesgo asociados a la clase $k$ \\
+$P(y=k\mid x)$ & probabilidad estimada de pertenecer a la clase $k$ (softmax) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{One-vs-Rest (multietiqueta)}}\\
+$w_\ell,\ b_\ell$ & pesos y sesgo del clasificador binario para la etiqueta $\ell$ \\
+$P(y_\ell=1\mid x)$ & probabilidad estimada de la etiqueta $\ell$ \\
+$\tau_\ell$ & umbral de decisión binaria para la etiqueta $\ell$ \\
+$\hat{y}_\ell$ & predicción binaria final para la etiqueta $\ell$ \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas binarias}}\\
+$TP,\ FP,\ FN,\ TN$ & verdaderos/falsos positivos y verdaderos/falsos negativos \\
+$\mathrm{TPR}$ & tasa de verdaderos positivos (recall), $TP/(TP+FN)$ \\
+$\mathrm{TNR}$ & tasa de verdaderos negativos (specificity), $TN/(TN+FP)$ \\
+$\mathrm{FPR}$ & tasa de falsos positivos, $FP/(FP+TN)=1-\mathrm{TNR}$ \\
+$\mathrm{FNR}$ & tasa de falsos negativos, $FN/(FN+TP)=1-\mathrm{TPR}$ \\
+$F_1$ & media armónica de precision y recall \\
+$\mathrm{MCC}$ & coeficiente de correlación de Matthews \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas multiclase}}\\
+$TP_k,\ FP_k,\ FN_k$ & conteos one-vs-rest correspondientes a la clase $k$ \\
+$\mathrm{Precision}_k,\ \mathrm{Recall}_k,\ F_{1,k}$ & métricas calculadas sobre la clase $k$ \\
+$s_k$ & soporte de la clase $k$, con $\sum_k s_k = n$ \\
+$F_{1,micro},\ F_{1,macro},\ F_{1,weighted}$ & promedios micro, macro y ponderado del $F_1$ \\
+$\mathrm{AUC}_k$ & ROC-AUC one-vs-rest de la clase $k$ \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas multietiqueta}}\\
+$TP_\ell,\ FP_\ell,\ FN_\ell$ & conteos por etiqueta $\ell$ sobre las celdas $(i,\ell)$ \\
+$Y_i,\ \hat{Y}_i$ & conjuntos de etiquetas verdaderas y predichas de la request $i$ \\
+$J_i$ & Jaccard por instancia, $|Y_i\cap\hat{Y}_i|/|Y_i\cup\hat{Y}_i|$ \\
+$J_{samples},\ J_{micro},\ J_{macro}$ & agregaciones del Jaccard por muestra, micro y macro \\
+$\mathrm{HL}$ & Hamming Loss \\
+$\mathrm{EMR}$ & Exact Match Ratio (subset accuracy) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas temporales y operativas}}\\
+$t_{opt}$ & tiempo total del bloque de búsqueda de hiperparámetros \\
+$t_{build}$ & tiempo de ajuste final del modelo (\texttt{train\_time\_seconds}) \\
+$t_{apply}$ & tiempo total del benchmark operativo (\texttt{wall\_time\_seconds}) \\
+$\mathrm{Throughput}$ & requests procesados por segundo durante el benchmark \\
 \bottomrule
 \end{longtable}
+}
 
 \subsection{Correspondencia con la implementación}
 En la implementación, una fila $x_i$ corresponde a un conjunto fijo de 25 features (longitudes, estructura, codificación, tokens y codificación one-hot del método). En SR-BH~2020, el dataset publicado incluye 24 features; en la versión adoptada para esta evaluación se recalcula el esquema completo y se agrega una feature derivada de headers (\texttt{req\_content\_length}) para unificar el conjunto en 25.
@@ -288,62 +354,110 @@ Las variables objetivo corresponden a:
 En SR-BH, \texttt{label\_multiclass} se deriva desde \texttt{label\_multilabel} mediante una política explícita basada en severidad. Para mantener trazabilidad, el dataset procesado puede acompañar esa variable con \texttt{label\_multiclass\_first} (auditoría) y \texttt{label\_primary\_severity} (puntaje asociado a la etiqueta primaria).
 
 \section{Detector one-class escalable}
-\subsection{Intuición}
-El enfoque \textit{one-class} modela el soporte del tráfico normal y marca como anómalas las requests que quedan fuera de esa región. Conceptualmente, esto conserva la motivación original de los WAF basados en anomalías: aprender qué aspecto tiene el tráfico legítimo HTTP y detectar desvíos aun cuando no exista un catálogo completo de ataques.
 
-\subsection{Implementación adoptada}
-La implementación seleccionada para todo el protocolo experimental es:
-\[
-\texttt{StandardScaler} \;\rightarrow\; \texttt{Nystroem} \;\rightarrow\; \texttt{SGDOneClassSVM}.
-\]
-Sea $x \in \mathbb{R}^d$ el vector de características HTTP extraídas de una request. Primero se aplica un escalado lineal y luego una transformación explícita $z(x) \in \mathbb{R}^m$ mediante aproximación de kernel. Sobre esa representación, el detector aprende un hiperplano que separa el tráfico normal del origen en el espacio transformado. La función de decisión puede expresarse como:
+\subsection{definición}
+
+Un detector \textit{one-class} es un modelo diseñado para aprender el comportamiento habitual de una sola clase de datos. En problemas de detección de anomalías, esa clase suele corresponder al comportamiento considerado normal. La idea central no es aprender todas las formas posibles de ataque, sino construir una representación del tráfico esperado y detectar como anómalas aquellas peticiones que se alejan de ese patrón.
+
+A diferencia de un clasificador binario tradicional, que necesita ejemplos de tráfico normal y de tráfico malicioso para aprender una separación entre ambas clases, el enfoque \textit{one-class} parte principalmente de una pregunta distinta: ¿qué características definen a las peticiones normales? Una vez aprendida esa región de normalidad, cualquier observación suficientemente diferente puede ser tratada como sospechosa.
+
+Esta lógica es especialmente útil en escenarios donde las anomalías pueden ser variadas, poco frecuentes o difíciles de anticipar. En tráfico HTTP, por ejemplo, una petición puede diferir del comportamiento habitual por tener una estructura de URL inusual, una cantidad anormal de parámetros, longitudes atípicas, codificaciones extrañas o combinaciones de características poco frecuentes. El detector no necesita conocer de antemano el nombre exacto del ataque; basta con que la petición se aparte del patrón aprendido como normal.
+
+\subsection{Modelo conceptual}
+
+Sea $x \in \R^d$ el vector de características que representa una petición. Cada componente de $x$ describe una propiedad observable de esa petición, como una longitud, un conteo, una proporción o un indicador binario. El objetivo del detector \textit{one-class} es aprender una región del espacio de características donde se concentran las observaciones normales.
+
+El modelo construye una frontera alrededor de los datos normales. Las peticiones que quedan dentro de esa frontera se consideran compatibles con el comportamiento esperado, mientras que las que quedan fuera se consideran anomalías.
+
+Una forma general de expresar la decisión del modelo es:
+
 \[
 f(x)=\operatorname{sign}\big(w^\top z(x)-\rho\big).
 \]
-Esta formulación preserva el supuesto central del problema ---entrenar solo con tráfico normal--- y, al mismo tiempo, mantiene el costo de entrenamiento e inferencia en un rango compatible con datasets del orden de $10^6$ requests \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}.
 
-\subsection{Justificación metodológica}
-La elección de esta implementación responde a tres criterios:
-\begin{enumerate}[leftmargin=*]
-  \item \textbf{Escalabilidad:} el backend basado en SGD permite entrenar con grandes volúmenes sin que el costo crezca de manera impracticable.
-  \item \textbf{Consistencia con el problema:} el detector sigue siendo \textit{one-class}, por lo que se ajusta únicamente con tráfico normal y se evalúa luego sobre tráfico mixto.
-  \item \textbf{Compatibilidad con tiempo real:} el pipeline final se integra naturalmente a la medición de latencia, \textit{throughput}, CPU/RAM y tamaño del modelo exigida por el protocolo experimental.
-\end{enumerate}
+En esta expresión, $z(x)$ representa una transformación del vector original $x$ hacia otro espacio de características. Esta transformación permite describir relaciones más complejas que las que podrían observarse directamente en el espacio original. El vector $w$ define la orientación de la frontera de decisión y $\rho$ actúa como umbral de separación.
 
-\subsection{Implicancias para el diseño experimental}
-A partir de esta definición, el capítulo experimental adopta una única variante \textit{one-class} para todos los datasets y corridas comparativas. Con ello se mantiene una traza experimental única, se evita duplicar familias conceptualmente solapadas y se conserva el foco en un protocolo ejecutable para el tamaño de datos objetivo.
+El término:
+
+\[
+w^\top z(x)-\rho
+\]
+
+puede interpretarse como una puntuación de normalidad. Si el valor queda del lado aceptado por la frontera, la petición se considera normal. Si queda del lado opuesto, se considera anómala. Por eso, el modelo no solo produce una etiqueta final, sino también una noción de distancia respecto al comportamiento aprendido.
+
+\subsection{Frontera de decisión y anomalías}
+
+La frontera de decisión separa la región donde se concentra el tráfico normal del resto del espacio de características. En un caso simple, esa frontera podría ser aproximadamente lineal. Sin embargo, en datos reales, el comportamiento normal no siempre se distribuye de forma simple. Puede haber varias zonas de normalidad, relaciones no lineales entre variables o combinaciones de características que solo son normales bajo ciertos contextos.
+
+Por ese motivo, los detectores \textit{one-class} suelen apoyarse en transformaciones de características o funciones de kernel. Estas permiten que una frontera aparentemente simple en un espacio transformado represente una separación más flexible en el espacio original. Así, el modelo puede adaptarse mejor a patrones donde la normalidad no forma una nube compacta y lineal.
+
+La anomalía, en este contexto, no significa necesariamente ataque confirmado. Significa que la petición se aleja del comportamiento aprendido como habitual. Por lo tanto, la salida del modelo debe interpretarse como una señal de sospecha o desviación, no como una identificación directa del tipo de ataque.
+
+\subsection{Escalabilidad del enfoque}
+
+El enfoque \textit{one-class} puede volverse costoso cuando se trabaja con grandes volúmenes de datos, especialmente si se utilizan métodos basados en kernels completos. Esto ocurre porque algunos modelos necesitan comparar muchas observaciones entre sí para construir la frontera de decisión, lo que incrementa el costo computacional a medida que crece el número de peticiones.
+
+Una alternativa escalable consiste en aproximar el efecto de un kernel mediante una representación explícita de menor costo. En lugar de trabajar directamente con todas las comparaciones entre ejemplos, se transforma cada petición a un espacio donde el modelo pueda operar de manera más eficiente. De esta forma, se busca mantener parte de la flexibilidad de los métodos no lineales, pero reduciendo el costo de entrenamiento y aplicación.
+
+La escalabilidad, entonces, no cambia la idea central del detector \textit{one-class}. El modelo sigue aprendiendo una región de normalidad y marcando como anómalas las observaciones que quedan fuera de ella. Lo que cambia es la forma computacional de aproximar esa frontera para que el enfoque pueda aplicarse a conjuntos de datos más grandes.
+
+\subsection{Interpretación de la salida}
+
+La salida de un detector \textit{one-class} suele interpretarse en dos niveles. El primero es la etiqueta final: normal o anómala. El segundo es la puntuación asociada a la decisión, que indica qué tan cerca o lejos se encuentra una petición respecto de la frontera aprendida.
+
+Una petición muy cercana a la región normal tendrá una puntuación compatible con el comportamiento esperado. En cambio, una petición muy alejada de esa región tendrá una puntuación más anómala. Esta diferencia es importante porque no todas las anomalías tienen la misma intensidad: algunas pueden estar apenas fuera de la frontera, mientras que otras pueden ser claramente atípicas.
+
+En términos prácticos, esta puntuación permite ordenar las peticiones según su grado de sospecha. Sin embargo, el modelo no explica por sí solo cuál es la causa exacta de la anomalía. Para interpretar el resultado, es necesario analizar las características de la petición y observar qué aspectos la separan del patrón normal.
+
+\subsection{Fortalezas y limitaciones}
+
+Una fortaleza del enfoque \textit{one-class} es que no depende de tener ejemplos rotulados de todos los ataques posibles. Esto lo hace útil cuando las anomalías son raras, cambiantes o difíciles de etiquetar. Además, puede detectar comportamientos novedosos, siempre que estos se aparten suficientemente de la normalidad aprendida.
+
+Sin embargo, también presenta limitaciones. Si el tráfico normal usado como referencia es incompleto o contiene mucha variabilidad, la frontera aprendida puede ser demasiado restrictiva o demasiado amplia. Una frontera muy restrictiva puede generar falsos positivos, marcando como anómalas peticiones legítimas. Una frontera demasiado amplia puede producir falsos negativos, aceptando como normales peticiones que en realidad son sospechosas.
+
+Otra limitación importante es que el modelo detecta desviaciones, pero no clasifica el tipo específico de ataque. Por ello, un detector \textit{one-class} es adecuado para identificar comportamientos anómalos, pero no reemplaza a un clasificador multiclase o multietiqueta cuando el objetivo es asignar una categoría concreta de ataque.
 
 \section{Regresión logística}
-\subsection{Caso binario}
-La regresión logística modela la probabilidad de ataque (clase 1) como:
+
+\subsection{Caso binario y función sigmoide}
+
+La regresión logística es un modelo supervisado de clasificación. En el caso
+binario, la tarea consiste en decidir entre dos categorías: por ejemplo,
+si una petición HTTP corresponde a tráfico normal o a un ataque.
+
+El modelo procede en dos pasos. Primero, a partir de una petición
+representada por un vector de características $x$, calcula un puntaje lineal:
 \[
-P(y=1\mid x)=\sigmoid(z), \quad z=w^\top x + b, \quad \sigmoid(z)=\frac{1}{1+e^{-z}}.
+z=w^\top x+b,
 \]
+donde $w$ es el vector de pesos y $b$ es el sesgo. Este puntaje no es más
+que una combinación ponderada de las características de la petición. A modo
+de ejemplo, si una característica indica la presencia de la palabra clave
+\texttt{SELECT} en la URL y su peso asociado es positivo, esa característica
+empuja el puntaje hacia arriba; si otra característica indica que el método
+HTTP es \texttt{GET} y su peso es negativo, la empuja hacia abajo.
 
-Definición exacta:
-\begin{itemize}[leftmargin=*]
-  \item $x \in \R^d$: vector de features de una request.
-  \item $w \in \R^d$: vector de pesos (importancia de cada feature).
-  \item $b \in \R$: sesgo (intercept).
-  \item $z \in \R$: score lineal (antes de la sigmoide).
-  \item $P(y=1\mid x)$: probabilidad estimada de que la request sea ataque.
-\end{itemize}
-
-\subsection{Función de pérdida (log-loss) con regularización}
-Para un dataset binario $\{(x_i,y_i)\}_{i=1}^n$ con $y_i\in\{0,1\}$ y $p_i=P(y=1\mid x_i)$, la pérdida promedio es:
-
+El puntaje $z$ puede tomar cualquier valor real: puede ser muy negativo,
+cercano a cero o muy positivo. Para interpretarlo como una probabilidad
+entre 0 y 1, se aplica la \textit{función sigmoide}:
 \[
-\mathcal{L}(w,b)= -\frac{1}{n}\sum_{i=1}^n \Big(y_i\log(p_i) + (1-y_i)\log(1-p_i)\Big) + \frac{\lambda}{2}\lVert w\rVert^2.
+P(y=1\mid x)=\sigma(z)=\frac{1}{1+e^{-z}}.
 \]
+La sigmoide es una curva en forma de S que comprime cualquier número real
+al intervalo $(0,1)$. Algunos valores concretos muestran su comportamiento:
+$\sigma(-3)\approx 0{,}05$, $\sigma(0)=0{,}5$ y $\sigma(3)\approx 0{,}95$.
+En la práctica, un puntaje muy negativo se traduce en "el modelo está casi
+seguro de que la petición es normal", un puntaje cercano a cero en "el modelo
+no está seguro" y un puntaje muy positivo en "el modelo está casi seguro de
+que es un ataque".
 
-Definición exacta:
-\begin{itemize}[leftmargin=*]
-  \item $\mathcal{L}(w,b)$: función objetivo a minimizar.
-  \item $p_i=\sigmoid(w^\top x_i + b)$.
-  \item $\lambda \ge 0$: fuerza de regularización $L2$ (penaliza pesos grandes).
-\end{itemize}
+En este trabajo, cuando la tarea es binaria, la clase positiva ($y=1$)
+representa ataque o anomalía y la clase negativa ($y=0$) representa tráfico
+normal. La Figura~\ref{fig:sigmoid} ilustra esta transformación de puntaje a
+probabilidad. Es importante notar que la salida no es solo una etiqueta, sino
+también un grado de confianza interpretable directamente como probabilidad
+estimada.
 
-\subsection{Figura de la sigmoide}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
@@ -351,7 +465,7 @@ Definición exacta:
   width=0.70\textwidth,
   height=0.35\textwidth,
   xlabel={$z$},
-  ylabel={$\sigmoid(z)$},
+  ylabel={$\sigma(z)$},
   domain=-6:6,
   samples=200,
   grid=both
@@ -359,58 +473,115 @@ Definición exacta:
 \addplot {1/(1+exp(-x))};
 \end{axis}
 \end{tikzpicture}
-\caption{Función sigmoide usada por regresión logística \cite{islr_logreg}.}
+\caption{Función sigmoide usada por regresión logística para transformar un
+puntaje lineal en una probabilidad \cite{islr_logreg}.}
 \label{fig:sigmoid}
 \end{figure}
 
-\subsection{Multiclase (softmax)}
-Para $K$ clases, el modelo asigna un score por clase:
+\subsection{Función de pérdida binaria}
+
+Una vez que el modelo produce una probabilidad, hace falta una manera de
+medir qué tan buenas son sus predicciones, de forma que los pesos $w$ y el
+sesgo $b$ puedan ajustarse. Esa medida se llama \textit{función de pérdida}.
+
+La idea es simple: el modelo debe pagar un costo alto cuando se
+equivoca con seguridad, y un costo bajo cuando acierta con seguridad.
+Considérese una petición que realmente es un ataque ($y=1$):
+\begin{itemize}
+  \item si el modelo le asigna una probabilidad de $0{,}99$ a la clase
+        ataque, la pérdida es muy pequeña, porque acertó con confianza;
+  \item si le asigna $0{,}5$, la pérdida es intermedia, porque dudó;
+  \item si le asigna $0{,}01$, la pérdida es muy grande, porque estaba
+        seguro y se equivocó.
+\end{itemize}
+
+Esta intuición se formaliza en la pérdida logística o \textit{log-loss}.
+Dado un conjunto $\{(x_i,y_i)\}_{i=1}^n$ con $y_i\in\{0,1\}$ y
+$p_i=P(y=1\mid x_i)$, su forma regularizada es:
 \[
-s_k(x)=w_k^\top x + b_k, \quad k=1,\dots,K,
+\mathcal{L}(w,b)=
+-\frac{1}{n}\sum_{i=1}^n
+\Big(y_i\log(p_i) + (1-y_i)\log(1-p_i)\Big)
++ \frac{\lambda}{2}\lVert w\rVert^2.
 \]
-y convierte esos scores en probabilidades con softmax:
+En el primer término, para cada ejemplo solo uno de los dos sumandos queda
+activo: si $y_i=1$ se evalúa $-\log(p_i)$, que crece cuando $p_i$ es bajo;
+si $y_i=0$ se evalúa $-\log(1-p_i)$, que crece cuando $p_i$ es alto. El
+segundo término, conocido como regularización $L2$, penaliza pesos muy
+grandes. Esto evita que el modelo se ajuste demasiado a los datos de
+entrenamiento y favorece soluciones más estables, sobre todo cuando hay
+muchas características o las clases están desbalanceadas
+\cite{islr_logreg,sklearn_logreg}.
+
+\subsection{Extensión multiclase mediante softmax}
+
+Cuando hay más de dos clases, no alcanza con estimar una sola probabilidad.
+El modelo debe asignar una probabilidad a cada clase posible, y esas
+probabilidades deben sumar 1.
+
+Para lograrlo, la regresión logística multiclase calcula un puntaje lineal
+por cada clase:
+\[
+s_k(x)=w_k^\top x + b_k, \qquad k=1,\dots,K.
+\]
+Cada clase tiene su propio vector de pesos $w_k$ y su propio sesgo $b_k$.
+Los $K$ puntajes resultantes se convierten luego en una distribución de
+probabilidades mediante la \textit{función softmax}:
 \[
 P(y=k\mid x)=\frac{\exp(s_k(x))}{\sum_{j=1}^K \exp(s_j(x))}.
 \]
+La softmax puede verse como una generalización de la sigmoide al caso de
+varias clases: toma todos los puntajes y los normaliza para que sean
+positivos y sumen 1. La exponencial cumple dos funciones simultáneas:
+garantiza positividad y amplifica las diferencias, de modo que la clase con
+mayor puntaje concentra una porción notablemente más grande de la
+probabilidad total.
 
-Definición exacta:
-\begin{itemize}[leftmargin=*]
-  \item $w_k \in \R^d$: vector de pesos de la clase $k$.
-  \item $b_k \in \R$: sesgo de la clase $k$.
-  \item $s_k(x)\in\R$: score lineal para la clase $k$.
-  \item $P(y=k\mid x)$: probabilidad predicha de la clase $k$.
-\end{itemize}
+A modo de ejemplo, supóngase un problema con tres clases: \texttt{NORMAL},
+\texttt{SQLi} y \texttt{XSS}. Para una petición particular, el modelo podría
+producir los puntajes $s_{\texttt{NORMAL}}=0{,}5$, $s_{\texttt{SQLi}}=2{,}5$
+y $s_{\texttt{XSS}}=1{,}0$. Tras aplicar softmax, esos puntajes se traducen
+en probabilidades aproximadas de $0{,}10$, $0{,}70$ y $0{,}20$,
+respectivamente. La clase predicha es \texttt{SQLi}, porque concentra la
+mayor probabilidad; el modelo también informa que existe un $20\%$ de
+posibilidad de que la petición sea \texttt{XSS} y un $10\%$ de que sea
+\texttt{NORMAL}.
 
-La pérdida típica (entropía cruzada multiclase) sobre $\{(x_i,y_i)\}_{i=1}^n$ es:
+Existen otras formas de abordar problemas con varias clases. Una alternativa
+frecuente es One-vs-Rest, que entrena un clasificador binario independiente
+por cada clase. Sin embargo, cuando cada petición pertenece exactamente a
+una sola clase, la formulación multinomial con softmax resulta más natural,
+porque modela todas las clases de manera conjunta y garantiza que la salida
+sea una única distribución sobre las $K$ clases
+\cite{sklearn_logreg,islr_logreg}.
+
+La pérdida asociada al caso multiclase es la \textit{entropía cruzada}:
 \[
-\mathcal{L} = -\frac{1}{n}\sum_{i=1}^n \log P(y=y_i\mid x_i) + \frac{\lambda}{2}\sum_{k=1}^K \lVert w_k\rVert^2.
+\mathcal{L}=
+-\frac{1}{n}\sum_{i=1}^{n}\log P(y=y_i\mid x_i)
++ \frac{\lambda}{2}\sum_{k=1}^{K}\lVert w_k\rVert^2.
 \]
-
-\subsection{Decisiones del proyecto}
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Baseline supervisado simple e interpretable}: establece una línea base clara antes de modelos más complejos \cite{islr_logreg}.
-  \item \textbf{\texttt{class\_weight="balanced"} (multiclase)}: re-pondera clases inversamente a su frecuencia en el entrenamiento \cite{sklearn_logreg}.
-  \item \textbf{Escalado}: mejora estabilidad numérica y convergencia del optimizador \cite{sklearn_logreg}.
-\end{itemize}
+La interpretación es análoga al caso binario: para cada ejemplo solo
+interesa la probabilidad que el modelo asignó a la clase verdadera; si esa
+probabilidad es alta, la pérdida es pequeña, y si es baja, la pérdida es
+grande. La regularización cumple el mismo papel que antes: limitar pesos
+extremos y favorecer modelos más estables.
 
 \section{Clasificación multietiqueta con One-vs-Rest (OvR)}
-En multietiqueta cada request puede pertenecer a múltiples etiquetas. One-vs-Rest entrena un clasificador binario por etiqueta:
-para cada $\ell \in \{1,\dots,L\}$,
+
+En clasificación multiclase, cada petición recibe una sola clase final. En clasificación multietiqueta, en cambio, una misma petición puede activar varias etiquetas al mismo tiempo. Esto es importante para SR-BH~2020 porque una petición HTTP puede estar asociada a más de un patrón CAPEC.
+
+One-vs-Rest resuelve el problema multietiqueta entrenando un clasificador binario por etiqueta. Para cada etiqueta $\ell\in\{1,\dots,L\}$, el modelo aprende si esa etiqueta está presente o ausente:
 \[
-P(y_\ell=1\mid x)=\sigmoid(w_\ell^\top x + b_\ell).
+P(y_\ell=1\mid x)=\sigma(w_\ell^\top x+b_\ell).
 \]
 
-Definición exacta:
-\begin{itemize}[leftmargin=*]
-  \item $\ell$: índice de etiqueta (de 1 a $L$).
-  \item $w_\ell \in \R^d$, $b_\ell \in \R$: parámetros del clasificador de la etiqueta $\ell$.
-  \item $y_\ell \in \{0,1\}$: variable que indica presencia (1) o ausencia (0) de la etiqueta $\ell$.
-\end{itemize}
-
-Para convertir probabilidades en predicción binaria se aplica un umbral (típicamente $\tau_\ell=0.5$):
+Después, cada probabilidad se convierte en una decisión binaria mediante un umbral $\tau_\ell$:
 \[
-\hat{y}_{\ell} = \ind\big[P(y_\ell=1\mid x)\ge \tau_\ell\big].
+\hat{y}_{\ell}=\ind\big[P(y_\ell=1\mid x)\ge \tau_\ell\big].
 \]
+
+La idea puede leerse con un ejemplo. Si las etiquetas posibles fueran \texttt{SQL Injection}, \texttt{Path Traversal} y \texttt{Command Injection}, OvR entrenaría tres clasificadores: uno pregunta si la petición es o no \texttt{SQL Injection}, otro si es o no \texttt{Path Traversal}, y otro si es o no \texttt{Command Injection}. Como las decisiones son independientes por etiqueta, la salida final puede contener una, varias o ninguna etiqueta.
 
 \begin{figure}[H]
 \centering
@@ -419,13 +590,13 @@ Para convertir probabilidades en predicción binaria se aplica un umbral (típic
   block/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=0.9cm},
   arrow/.style={-Latex, thick}
 ]
-\node[block] (x) {$x$\\(features HTTP)};
-\node[block, right=1.8cm of x] (c1) {Clasificador\\$\ell=1$};
-\node[block, above=0.7cm of c1] (c2) {Clasificador\\$\ell=2$};
-\node[block, below=0.7cm of c1] (c3) {Clasificador\\$\ell=L$};
+\node[block] (x) {$x$\\(características HTTP)};
+\node[block, right=1.8cm of x] (c1) {Clasificador\\etiqueta $1$};
+\node[block, above=0.7cm of c1] (c2) {Clasificador\\etiqueta $2$};
+\node[block, below=0.7cm of c1] (c3) {Clasificador\\etiqueta $L$};
 
-\node[block, right=2.1cm of c1] (thr) {Umbral /\\Calibración};
-\node[block, right=1.8cm of thr] (y) {$\hat{y}\in\{0,1\}^L$\\(multietiqueta)};
+\node[block, right=2.1cm of c1] (thr) {Umbrales\\por etiqueta};
+\node[block, right=1.8cm of thr] (y) {$\hat{y}\in\{0,1\}^L$\\salida multietiqueta};
 
 \draw[arrow] (x) -- (c1);
 \draw[arrow] (x) -- (c2);
@@ -438,170 +609,636 @@ Para convertir probabilidades en predicción binaria se aplica un umbral (típic
 \draw[arrow] (thr) -- (y);
 \end{tikzpicture}%
 }
-\caption{Esquema One-vs-Rest para multietiqueta: un clasificador binario por etiqueta \cite{tsoumakas_multilabel_overview,rifkin_ova}.}
+\caption{Esquema One-vs-Rest para clasificación multietiqueta: una misma petición se evalúa contra varios clasificadores binarios, uno por etiqueta \cite{tsoumakas_multilabel_overview,rifkin_ova}.}
 \label{fig:ovr}
 \end{figure}
 
+La Figura~\ref{fig:ovr} resume este flujo. El vector $x$ entra a varios clasificadores binarios; cada clasificador produce una probabilidad asociada a una etiqueta; luego se aplican umbrales y se obtiene un vector de salida. Esta salida no es una única clase, sino una lista de decisiones sí/no, una por etiqueta.
+
 \section{Métricas y base matemática}
-\subsection{Binario}
-Para evaluación binaria definimos:
+
+Esta sección presenta las métricas usadas para evaluar los modelos de
+detección. Antes de definir cada una conviene introducir los bloques
+básicos que las componen, ya que casi todas se construyen sobre los
+mismos conceptos: primero el caso binario, luego la generalización a
+multiclase y finalmente el caso multietiqueta. Dentro de cada bloque reutilizamos un mismo ejemplo numérico
+a lo largo de las distintas métricas.
+
+\subsection{Clasificación binaria}
+
+\subsubsection{La matriz de confusión}
+
+Cuando un clasificador binario distingue entre dos clases (por ejemplo,
+\emph{ataque} vs.\ \emph{normal}), cada predicción cae en una de cuatro
+casillas:
 \begin{itemize}[leftmargin=*]
-  \item $TP$ (true positives): ataques/anómalos correctamente predichos como ataque.
-  \item $FP$ (false positives): normales predichos erróneamente como ataque.
-  \item $FN$ (false negatives): ataques predichos erróneamente como normal.
-  \item $TN$ (true negatives): normales correctamente predichos como normal.
+  \item $TP$ (\emph{true positives}): ataques correctamente predichos como ataque.
+  \item $FP$ (\emph{false positives}): tráfico normal predicho erróneamente como ataque.
+  \item $FN$ (\emph{false negatives}): ataques predichos erróneamente como normal.
+  \item $TN$ (\emph{true negatives}): tráfico normal correctamente predicho como normal.
 \end{itemize}
 
-Con estos conteos, las métricas exportadas por los scripts se calculan así:
+\paragraph{Ejemplo de referencia.} Supongamos un conjunto de prueba con
+100 requests, de los cuales 20 son ataques. El clasificador detecta
+correctamente 16 ataques ($TP=16$), pasa por alto 4 ($FN=4$), confunde 5
+normales con ataques ($FP=5$) y clasifica bien los 75 restantes
+($TN=75$). Este ejemplo se reutiliza en las métricas siguientes.
+
+\subsubsection{Accuracy}
+
+\textbf{Fórmula:}
 \[
-\mathrm{Accuracy}=\frac{TP+TN}{TP+TN+FP+FN},\qquad
-\mathrm{Balanced\ Accuracy}=\frac{1}{2}\left(\frac{TP}{TP+FN}+\frac{TN}{TN+FP}\right).
+\mathrm{Accuracy}=\frac{TP+TN}{TP+TN+FP+FN}.
 \]
+
+\textbf{Utilidad.} Mide la proporción global de aciertos. Es la métrica
+más intuitiva, pero engaña cuando las clases están desbalanceadas: si el
+99\% de las requests son normales, predecir siempre ``normal'' alcanza
+un 99\% de accuracy sin detectar ni un solo ataque.
+
+\textbf{Ejemplo.}
 \[
-\mathrm{Precision}=\frac{TP}{TP+FP},\qquad
-\mathrm{Recall}=\mathrm{TPR}=\frac{TP}{TP+FN},\qquad
+\mathrm{Accuracy}=\frac{16+75}{100}=0{,}91.
+\]
+
+\subsubsection{Precision}
+
+\textbf{Fórmula:}
+\[
+\mathrm{Precision}=\frac{TP}{TP+FP}.
+\]
+
+\textbf{Utilidad.} De todas las requests que el modelo etiquetó como
+ataque, qué proporción \emph{realmente} lo era. Una precision alta
+significa pocas falsas alarmas, lo cual es deseable cuando cada alerta
+tiene un costo (por ejemplo, una intervención humana o el bloqueo de un
+usuario legítimo).
+
+\textbf{Ejemplo.} El modelo marcó como ataque a $TP+FP=21$ requests, de
+las cuales 16 lo eran realmente:
+\[
+\mathrm{Precision}=\frac{16}{21}\approx 0{,}76.
+\]
+Aproximadamente 3 de cada 4 alertas son legítimas.
+
+\subsubsection{Recall (sensibilidad o TPR)}
+
+\textbf{Fórmula:}
+\[
+\mathrm{Recall}=\mathrm{TPR}=\frac{TP}{TP+FN}.
+\]
+
+\textbf{Utilidad.} De todos los ataques que existían realmente, qué
+proporción detectó el modelo. En seguridad suele ser la métrica más
+crítica: un ataque no detectado puede tener consecuencias graves.
+
+\textbf{Ejemplo.} Existían 20 ataques y se detectaron 16:
+\[
+\mathrm{Recall}=\frac{16}{20}=0{,}80.
+\]
+El 80\% de los ataques fue detectado; el 20\% restante pasó inadvertido.
+
+\subsubsection{$F_1$-score}
+
+Para entender $F_1$ es necesario haber visto antes precision y recall,
+porque $F_1$ los combina.
+
+\textbf{Fórmula:}
+\[
 F_1=\frac{2\cdot \mathrm{Precision}\cdot \mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.
 \]
+
+\textbf{Utilidad.} Es la \emph{media armónica} de precision y recall. Se
+usa la media armónica (en lugar de la aritmética) porque penaliza
+fuertemente cuando una de las dos es baja: si una es 1 y la otra es 0,
+el promedio aritmético sería 0{,}5, pero $F_1$ es 0. Esto evita inflar
+el resultado optimizando solo una de las dos.
+
+\textbf{Ejemplo.} Con $\mathrm{Precision}=0{,}76$ y $\mathrm{Recall}=0{,}80$:
+\[
+F_1=\frac{2\cdot 0{,}76\cdot 0{,}80}{0{,}76+0{,}80}\approx 0{,}78.
+\]
+
+\subsubsection{Specificity (TNR), FPR y FNR}
+
+Estas tres métricas son ``primas'' del recall, vistas desde la otra clase.
+
+\textbf{Fórmulas:}
 \[
 \mathrm{Specificity}=\mathrm{TNR}=\frac{TN}{TN+FP},\qquad
-\mathrm{FPR}=\frac{FP}{FP+TN}=1-\mathrm{Specificity},\qquad
+\mathrm{FPR}=\frac{FP}{FP+TN}=1-\mathrm{Specificity},
+\]
+\[
 \mathrm{FNR}=\frac{FN}{FN+TP}=1-\mathrm{Recall}.
 \]
 
-Como medida balanceada entre las cuatro celdas de la matriz de confusión se reporta el \textit{Matthews Correlation Coefficient} (MCC),
-recomendado como métrica robusta en escenarios desbalanceados \cite{chicco_mcc}:
+\textbf{Utilidad.}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Specificity (TNR):} de todas las requests normales, qué
+  proporción se clasificó bien como normal. Es el ``recall de la clase
+  negativa''.
+  \item \textbf{FPR:} qué porcentaje de las requests normales generó una
+  falsa alarma.
+  \item \textbf{FNR:} qué porcentaje de los ataques pasó desapercibido.
+\end{itemize}
+
+\textbf{Ejemplo.} Con $TN=75$, $FP=5$, $FN=4$, $TP=16$:
+\[
+\mathrm{Specificity}=\frac{75}{80}=0{,}9375,\qquad
+\mathrm{FPR}=\frac{5}{80}=0{,}0625,\qquad
+\mathrm{FNR}=\frac{4}{20}=0{,}20.
+\]
+
+\subsubsection{Balanced Accuracy}
+
+\textbf{Fórmula:}
+\[
+\mathrm{Balanced\ Accuracy}=\frac{1}{2}\left(\mathrm{TPR}+\mathrm{TNR}\right)
+=\frac{1}{2}\left(\frac{TP}{TP+FN}+\frac{TN}{TN+FP}\right).
+\]
+
+\textbf{Utilidad.} Promedia el recall de cada clase. Corrige el problema
+de la accuracy en datasets desbalanceados: aunque haya muchos más
+normales que ataques, ambas clases pesan lo mismo.
+
+\textbf{Ejemplo.} Con $\mathrm{TPR}=0{,}80$ y $\mathrm{TNR}=0{,}9375$:
+\[
+\mathrm{Balanced\ Accuracy}=\frac{0{,}80+0{,}9375}{2}\approx 0{,}87.
+\]
+Es algo menor que la accuracy ordinaria (0{,}91): refleja que la clase
+minoritaria (ataques) se detecta peor que la mayoritaria.
+
+\subsubsection{Matthews Correlation Coefficient (MCC)}
+
+\textbf{Fórmula:}
 \[
 \mathrm{MCC}=\frac{TP\cdot TN - FP\cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}.
 \]
 
-Cuando el modelo entrega un score continuo, también se calculan ROC-AUC y PR-AUC a partir de dicho score. En los scripts binarios esto se hace con
-\texttt{roc\_auc\_score(y\_true, y\_score)} y \texttt{average\_precision\_score(y\_true, y\_score)}. PR-AUC se conserva porque resulta más informativa que ROC-AUC cuando la clase positiva es minoritaria \cite{saito_pr_auc}.
-
-\subsection{Multiclase: accuracy, promedios micro/macro/weighted y MCC}
-En multiclase, sea $K$ la cantidad de clases y sea $TP_k,FP_k,FN_k$ el conteo asociado a la clase $k$ tratada en esquema \emph{one-vs-rest}. En la implementación se reportan:
+\textbf{Utilidad.} El MCC condensa las cuatro celdas de la matriz de
+confusión en un único número en el rango $[-1,+1]$:
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Accuracy:} proporción de instancias correctamente clasificadas.
-  \[
-  \mathrm{Accuracy}=\frac{1}{n}\sum_{i=1}^{n}\ind[\hat y_i=y_i].
-  \]
-  \item \textbf{Balanced Accuracy:} promedio del recall por clase.
-  \[
-  \mathrm{Balanced\ Accuracy}=\frac{1}{K}\sum_{k=1}^{K}\frac{TP_k}{TP_k+FN_k}.
-  \]
-  \item \textbf{Precision, Recall y $F_1$ micro:} se calculan agregando primero todos los $TP_k$, $FP_k$ y $FN_k$.
-  \[
-  \mathrm{Precision}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FP_k)},\qquad
-  \mathrm{Recall}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FN_k)}.
-  \]
-  \item \textbf{Precision, Recall y $F_1$ macro:} promedio simple de la métrica por clase.
-  \[
-  \mathrm{Precision}_{macro}=\frac{1}{K}\sum_{k=1}^{K}\mathrm{Precision}_k,
-  \qquad
-  F_{1,macro}=\frac{1}{K}\sum_{k=1}^{K}F_{1,k}.
-  \]
-  \item \textbf{Precision, Recall y $F_1$ weighted:} promedio por clase ponderado por su soporte real.
-  Si $s_k$ es la cantidad de ejemplos verdaderos de la clase $k$ y $\sum_k s_k=n$,
-  \[
-  F_{1,weighted}=\sum_{k=1}^{K}\frac{s_k}{n}F_{1,k}.
-  \]
-  Los mismos pesos se usan para las versiones \textit{weighted} de precision y recall.
-  \item \textbf{MCC multiclase:} se calcula con la generalización implementada por \texttt{matthews\_corrcoef}, adecuada para más de dos clases.
+  \item $+1$: predicción perfecta.
+  \item $0$: el modelo no es mejor que adivinar al azar.
+  \item $-1$: predicción inversa (siempre se equivoca).
 \end{itemize}
+Se considera más robusto que accuracy o $F_1$ en escenarios
+desbalanceados, porque solo toma valores altos cuando el modelo acierta
+bien en \emph{ambas} clases \cite{chicco_mcc}.
 
-Si $K=2$ y el modelo entrega probabilidades, los scripts supervisados agregan además ROC-AUC, PR-AUC, specificity, FPR, FNR y TPR. Si $K>2$, exportan \texttt{roc\_auc\_ovr\_macro}, \texttt{roc\_auc\_ovr\_weighted}, \texttt{pr\_auc\_macro} y \texttt{pr\_auc\_weighted}, calculadas sobre una binarización one-vs-rest de las clases.
+\textbf{Ejemplo.}
+\[
+\mathrm{MCC}=\frac{16\cdot 75 - 5\cdot 4}{\sqrt{21\cdot 20\cdot 80\cdot 79}}
+=\frac{1180}{\sqrt{2{,}6544\times 10^{6}}}\approx 0{,}72.
+\]
 
-\subsection{Multietiqueta: Hamming Loss, Jaccard y coincidencia exacta}
-En multietiqueta, $Y\in\{0,1\}^{n\times L}$ y $\hat{Y}\in\{0,1\}^{n\times L}$. Cada request puede activar ninguna, una o varias etiquetas.
+\subsubsection{ROC-AUC y PR-AUC}
 
-\paragraph{Hamming Loss.}
-Mide el error promedio por decisión etiqueta-por-request:
+Cuando el clasificador no entrega solo una etiqueta sino un \emph{score
+continuo} (típicamente una probabilidad entre 0 y 1), hace falta un
+\emph{umbral} para decidir si una request es ataque. Cada umbral produce
+una matriz de confusión distinta y, por lo tanto, un par diferente de
+$(\mathrm{Precision},\mathrm{Recall})$ o de $(\mathrm{FPR},\mathrm{TPR})$.
+Las curvas ROC y PR resumen el comportamiento del modelo a lo largo de
+\emph{todos} los umbrales posibles, y sus áreas bajo la curva (AUC) lo
+sintetizan en un solo número.
+
+\textbf{ROC-AUC.} La curva ROC grafica TPR (eje $y$) frente a FPR (eje
+$x$). El ROC-AUC vive en $[0,1]$ y se interpreta como la probabilidad de
+que el modelo asigne un score más alto a un ataque elegido al azar que a
+un normal elegido al azar. $0{,}5$ corresponde a un modelo aleatorio;
+$1{,}0$ a uno perfecto.
+
+\textbf{PR-AUC.} La curva PR grafica Precision (eje $y$) frente a Recall
+(eje $x$). Cuando la clase positiva es minoritaria, PR-AUC suele ser más
+informativa que ROC-AUC, porque la curva ROC puede verse demasiado
+optimista al estar dominada por el gran número de verdaderos negativos
+\cite{saito_pr_auc}.
+
+\textbf{Ejemplo} Si el modelo asigna scores
+$\{0{,}9;\ 0{,}8;\ 0{,}3\}$ a tres ataques y
+$\{0{,}7;\ 0{,}2;\ 0{,}1\}$ a tres normales, los ataques superan a los
+normales en 8 de las 9 comparaciones posibles, así que
+$\mathrm{ROC\text{-}AUC}=8/9\approx 0{,}89$.
+
+\subsection{Clasificación multiclase}
+
+En multiclase hay $K$ clases posibles (por ejemplo, varias categorías de
+ataque más la clase ``normal'') y cada instancia pertenece a
+\emph{exactamente una}. Para reutilizar las métricas binarias se usa el
+esquema \emph{one-vs-rest}: para cada clase $k$ se considera ``positiva''
+la clase $k$ y ``negativas'' todas las demás, obteniéndose $TP_k$,
+$FP_k$ y $FN_k$ por clase.
+
+\paragraph{Ejemplo de referencia.} Trabajaremos con tres clases ($A$,
+$B$, $C$) sobre 100 instancias, con la siguiente matriz de confusión:
+\[
+\begin{array}{l|ccc|c}
+ & \text{Pred }A & \text{Pred }B & \text{Pred }C & \text{Total} \\
+\hline
+\text{True }A & 85 & 3 & 2 & 90 \\
+\text{True }B & 2  & 4 & 1 & 7  \\
+\text{True }C & 1  & 1 & 1 & 3  \\
+\hline
+\text{Total} & 88 & 8 & 4 & 100
+\end{array}
+\]
+La clase $A$ es mayoritaria (soporte 90), $B$ y $C$ son minoritarias.
+A partir de esta matriz se obtienen los conteos por clase, que
+reutilizamos en los ejemplos:
+\[
+\begin{array}{l|ccc}
+ & TP_k & FP_k & FN_k \\
+\hline
+A & 85 & 3 & 5 \\
+B & 4  & 4 & 3 \\
+C & 1  & 3 & 2
+\end{array}
+\]
+
+\subsubsection{Accuracy multiclase}
+
+\textbf{Fórmula:}
+\[
+\mathrm{Accuracy}=\frac{1}{n}\sum_{i=1}^{n}\ind[\hat y_i=y_i].
+\]
+
+\textbf{Utilidad.} Proporción de instancias correctamente clasificadas.
+Sigue siendo intuitiva pero hereda el problema del desbalance: si una
+clase domina, puede ocultar el desempeño en clases minoritarias.
+
+\textbf{Ejemplo.} En la diagonal de la matriz hay $85+4+1=90$ aciertos
+sobre 100, así que $\mathrm{Accuracy}=0{,}90$.
+
+\subsubsection{Balanced Accuracy multiclase}
+
+\textbf{Fórmula:}
+\[
+\mathrm{Balanced\ Accuracy}=\frac{1}{K}\sum_{k=1}^{K}\frac{TP_k}{TP_k+FN_k}.
+\]
+
+\textbf{Utilidad.} Promedio del recall por clase: cada clase contribuye
+igual sin importar cuántos ejemplos tenga. Es útil cuando las clases
+minoritarias son tan importantes como las mayoritarias.
+
+\textbf{Ejemplo.} Los recalls por clase son $85/90\approx 0{,}944$,
+$4/7\approx 0{,}571$ y $1/3\approx 0{,}333$:
+\[
+\mathrm{Balanced\ Accuracy}=\frac{0{,}944+0{,}571+0{,}333}{3}\approx 0{,}616.
+\]
+Mucho menor que la accuracy ordinaria (0{,}90), porque las clases
+minoritarias se detectan bastante peor.
+
+\subsubsection{Promedios micro, macro y weighted}
+
+Cuando hay más de dos clases hace falta agregar las métricas por clase
+en un solo número. Existen tres formas estándar; cada una responde a una
+pregunta diferente. Para ilustrarlas calculamos primero precision,
+recall y $F_1$ por clase a partir del ejemplo de referencia:
+\[
+\begin{array}{l|ccc}
+ & \mathrm{Precision}_k & \mathrm{Recall}_k & F_{1,k} \\
+\hline
+A & 85/88\approx 0{,}966 & 85/90\approx 0{,}944 & 0{,}955 \\
+B & 4/8 = 0{,}500        & 4/7 \approx 0{,}571  & 0{,}533 \\
+C & 1/4 = 0{,}250        & 1/3 \approx 0{,}333  & 0{,}286
+\end{array}
+\]
+
+\textbf{Micro.} Se suman primero los conteos de todas las clases y luego
+se calcula la métrica:
+\[
+\mathrm{Precision}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FP_k)},\qquad
+\mathrm{Recall}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FN_k)}.
+\]
+Cada \emph{instancia} pesa igual.
+
+\emph{Ejemplo.} Con $\sum_k TP_k=90$, $\sum_k FP_k=10$ y $\sum_k FN_k=10$:
+\[
+\mathrm{Precision}_{micro}=\frac{90}{100}=0{,}90,\quad
+\mathrm{Recall}_{micro}=\frac{90}{100}=0{,}90,\quad
+F_{1,micro}=0{,}90.
+\]
+En problemas multiclase de etiqueta única las tres métricas micro
+coinciden con la accuracy, como ocurre aquí ($0{,}90$).
+
+\textbf{Macro.} Se calcula la métrica por clase y se promedia sin
+ponderar:
+\[
+\mathrm{Precision}_{macro}=\frac{1}{K}\sum_{k=1}^{K}\mathrm{Precision}_k,\qquad
+F_{1,macro}=\frac{1}{K}\sum_{k=1}^{K}F_{1,k}.
+\]
+Cada \emph{clase} pesa igual. Penaliza el bajo desempeño en clases
+minoritarias.
+
+\emph{Ejemplo.}
+\[
+F_{1,macro}=\frac{0{,}955+0{,}533+0{,}286}{3}\approx 0{,}591.
+\]
+
+\textbf{Weighted.} Se calcula la métrica por clase y se promedia
+ponderando por el soporte $s_k$ (cantidad de ejemplos verdaderos de la
+clase $k$, con $\sum_k s_k = n$):
+\[
+F_{1,weighted}=\sum_{k=1}^{K}\frac{s_k}{n}F_{1,k}.
+\]
+Las clases mayoritarias pesan más. Es útil cuando se busca un valor
+representativo del comportamiento global respetando el tamaño real de
+cada clase.
+
+\emph{Ejemplo.} Con soportes $s_A=90$, $s_B=7$, $s_C=3$:
+\[
+F_{1,weighted}=0{,}90\cdot 0{,}955+0{,}07\cdot 0{,}533+0{,}03\cdot 0{,}286\approx 0{,}906.
+\]
+
+\textbf{Comparación.} Sobre el mismo modelo:
+\[
+F_{1,micro}=0{,}90,\qquad F_{1,macro}\approx 0{,}59,\qquad F_{1,weighted}\approx 0{,}91.
+\]
+Las versiones micro y weighted dan valores parecidos y altos porque la
+clase mayoritaria ($A$) domina el cálculo. La macro, en cambio, revela
+que el modelo trata mal a las clases minoritarias: ese 0{,}59 es la
+señal honesta de que $B$ y $C$ están lejos de funcionar bien.
+
+\subsubsection{MCC multiclase}
+
+El MCC se generaliza a $K$ clases mediante una fórmula equivalente
+expresada sobre la matriz de confusión completa, manteniendo el rango y
+la interpretación: $+1$ es perfecto, $0$ es aleatorio y los valores
+negativos indican peor que el azar. Sigue siendo robusto frente al
+desbalance.
+
+\subsubsection{ROC-AUC y PR-AUC multiclase}
+
+Cuando $K>2$ y el modelo entrega probabilidades, ROC-AUC y PR-AUC se
+calculan sobre una binarización \emph{one-vs-rest}: para cada clase $k$
+se construye una curva tratando ``$k$ vs.\ todas las demás'' y se
+obtiene un AUC por clase. Luego se agregan: las versiones \emph{macro}
+promedian sin ponderar, las \emph{weighted} promedian ponderando por el
+soporte $s_k$.
+
+\textbf{Ejemplo.} Supongamos que, sobre el ejemplo de referencia, las
+ROC-AUC one-vs-rest por clase son $\mathrm{AUC}_A=0{,}97$,
+$\mathrm{AUC}_B=0{,}80$, $\mathrm{AUC}_C=0{,}60$. Entonces
+\[
+\mathrm{ROC\text{-}AUC}_{macro}=\frac{0{,}97+0{,}80+0{,}60}{3}\approx 0{,}79,
+\]
+\[
+\mathrm{ROC\text{-}AUC}_{weighted}=0{,}90\cdot 0{,}97+0{,}07\cdot 0{,}80+0{,}03\cdot 0{,}60\approx 0{,}94.
+\]
+La versión macro deja ver que la clase $C$ se ordena casi al azar; la
+weighted lo enmascara al estar dominada por $A$.
+
+\subsection{Clasificación multietiqueta}
+
+A diferencia de multiclase, donde cada instancia pertenece a
+\emph{exactamente una} clase, en multietiqueta cada instancia puede
+tener \emph{varias etiquetas a la vez} o ninguna. Por ejemplo, una
+request maliciosa puede combinar varias técnicas de ataque (varios
+CAPECs simultáneos).
+
+Formalmente, $Y\in\{0,1\}^{n\times L}$ y $\hat{Y}\in\{0,1\}^{n\times L}$,
+donde $L$ es la cantidad total de etiquetas posibles y $y_{i\ell}=1$
+indica que la instancia $i$ tiene la etiqueta $\ell$.
+
+\paragraph{Ejemplo de referencia.} Usaremos $n=3$ instancias y $L=3$
+etiquetas ($L_1$, $L_2$, $L_3$), con verdad y predicción:
+\[
+\begin{array}{c|ccc|ccc}
+ & \multicolumn{3}{c|}{Y_i\ \text{(verdad)}} & \multicolumn{3}{c}{\hat Y_i\ \text{(predicción)}} \\
+i & L_1 & L_2 & L_3 & L_1 & L_2 & L_3 \\
+\hline
+1 & 1 & 1 & 0 & 1 & 1 & 0 \\
+2 & 0 & 1 & 1 & 1 & 1 & 0 \\
+3 & 1 & 0 & 0 & 1 & 0 & 1
+\end{array}
+\]
+Hay $nL=9$ decisiones etiqueta-instancia en total. Computando por
+etiqueta los conteos:
+\[
+\begin{array}{l|ccc}
+ & TP_\ell & FP_\ell & FN_\ell \\
+\hline
+L_1 & 2 & 1 & 0 \\
+L_2 & 2 & 0 & 0 \\
+L_3 & 0 & 1 & 1
+\end{array}
+\]
+
+\subsubsection{Hamming Loss}
+
+\textbf{Fórmula:}
 \[
 \mathrm{HL}=\frac{1}{nL}\sum_{i=1}^n\sum_{\ell=1}^L \ind\big[\hat{y}_{i\ell}\ne y_{i\ell}\big].
 \]
-Un valor menor indica mejor desempeño.
 
-\paragraph{Precision, Recall y $F_1$ micro/macro.}
-Los scripts multilabel calculan versiones micro y macro de precision, recall y $F_1$:
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Micro:} agrega todas las decisiones positivas de todas las etiquetas antes de calcular la métrica.
-  \item \textbf{Macro:} calcula la métrica por etiqueta y luego promedia en forma simple.
-\end{itemize}
+\textbf{Utilidad.} Mide el error promedio por decisión
+etiqueta-por-instancia: equivale a la fracción de celdas equivocadas en
+la matriz $\hat{Y}$ comparada con $Y$. Cuanto menor, mejor;
+$\mathrm{HL}=0$ es predicción perfecta.
 
-\paragraph{Jaccard Similarity.}
-Para una request $i$, con conjuntos de etiquetas verdaderas $Y_i$ y predichas $\hat{Y}_i$,
+\textbf{Ejemplo.} En el ejemplo de referencia las celdas mal predichas
+son tres: $(i{=}2,L_1)$, $(i{=}2,L_3)$ y $(i{=}3,L_3)$. Entonces
 \[
-J_i = \frac{|Y_i \cap \hat{Y}_i|}{|Y_i \cup \hat{Y}_i|}.
+\mathrm{HL}=\frac{3}{9}\approx 0{,}33.
 \]
-En la implementación aparecen tres variantes, según el script:
+
+\subsubsection{Precision, Recall y $F_1$ micro/macro multietiqueta}
+
+Las definiciones por etiqueta son las mismas que en multiclase, pero
+ahora cada etiqueta $\ell$ aporta sus propios $TP_\ell$, $FP_\ell$,
+$FN_\ell$ basándose en las celdas correspondientes de $Y$ y $\hat Y$.
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Jaccard micro:} agrega todos los aciertos y errores de todas las etiquetas.
-  \item \textbf{Jaccard macro:} promedia el Jaccard por etiqueta.
-  \item \textbf{Jaccard samples:} promedia $J_i$ por instancia. Esta variante aparece en el script multietiqueta dedicado cuando el problema no cae en modo binario reducido.
+  \item \textbf{Micro:} agrega todas las decisiones positivas de todas
+  las etiquetas antes de calcular la métrica. Cada decisión
+  etiqueta-instancia pesa igual.
+  \item \textbf{Macro:} calcula la métrica por etiqueta y luego promedia
+  sin ponderar. Cada etiqueta pesa igual, lo que penaliza el mal
+  desempeño en etiquetas raras.
 \end{itemize}
 
-\paragraph{Exact Match Ratio.}
-También llamado \textit{subset accuracy}, mide la proporción de requests cuya predicción multilabel coincide exactamente con el conjunto verdadero:
+\textbf{Ejemplo.} Calculamos primero por etiqueta:
+\[
+\begin{array}{l|ccc}
+ & \mathrm{Precision}_\ell & \mathrm{Recall}_\ell & F_{1,\ell} \\
+\hline
+L_1 & 2/3\approx 0{,}667 & 2/2 = 1{,}000 & 0{,}800 \\
+L_2 & 2/2 = 1{,}000      & 2/2 = 1{,}000 & 1{,}000 \\
+L_3 & 0/1 = 0            & 0/1 = 0       & 0
+\end{array}
+\]
+
+\emph{Macro.}
+\[
+F_{1,macro}=\frac{0{,}800+1{,}000+0}{3}=0{,}600.
+\]
+
+\emph{Micro.} Con $\sum_\ell TP_\ell=4$, $\sum_\ell FP_\ell=2$ y
+$\sum_\ell FN_\ell=1$:
+\[
+\mathrm{Precision}_{micro}=\frac{4}{4+2}\approx 0{,}667,\quad
+\mathrm{Recall}_{micro}=\frac{4}{4+1}=0{,}800,\quad
+F_{1,micro}\approx 0{,}727.
+\]
+
+La macro castiga fuerte el desastre en $L_3$ (que vale tanto como las
+otras dos etiquetas), mientras que la micro lo diluye porque $L_3$
+aporta pocas decisiones positivas en términos absolutos.
+
+\subsubsection{Jaccard Similarity}
+
+\textbf{Fórmula (por instancia):}
+\[
+J_i = \frac{|Y_i \cap \hat{Y}_i|}{|Y_i \cup \hat{Y}_i|},
+\]
+donde $Y_i$ y $\hat{Y}_i$ son los conjuntos de etiquetas verdaderas y
+predichas de la instancia $i$.
+
+\textbf{Utilidad.} Mide cuánto se parecen los dos conjuntos de
+etiquetas: $J_i=1$ si coinciden exactamente, $J_i=0$ si son disjuntos.
+Es una forma natural de comparar predicciones con etiquetas múltiples,
+porque considera simultáneamente aciertos, omisiones y excesos.
+
+Existen tres variantes según cómo se agregan los $J_i$:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Jaccard samples:} promedia $J_i$ sobre las instancias.
+  \item \textbf{Jaccard micro:} agrega todas las celdas positivas y
+  calcula un único cociente global, $J_{micro}=\sum_\ell TP_\ell\,/\,\sum_\ell(TP_\ell+FP_\ell+FN_\ell)$.
+  \item \textbf{Jaccard macro:} calcula un Jaccard por etiqueta,
+  $J_\ell=TP_\ell/(TP_\ell+FP_\ell+FN_\ell)$, y luego promedia.
+\end{itemize}
+
+\textbf{Ejemplo.} Sobre el ejemplo de referencia.
+
+\emph{Por instancia.}
+\[
+J_1=\tfrac{|\{L_1,L_2\}\cap\{L_1,L_2\}|}{|\{L_1,L_2\}\cup\{L_1,L_2\}|}=\tfrac{2}{2}=1,
+\]
+\[
+J_2=\tfrac{|\{L_2,L_3\}\cap\{L_1,L_2\}|}{|\{L_2,L_3\}\cup\{L_1,L_2\}|}=\tfrac{1}{3},\qquad
+J_3=\tfrac{|\{L_1\}\cap\{L_1,L_3\}|}{|\{L_1\}\cup\{L_1,L_3\}|}=\tfrac{1}{2}.
+\]
+
+\emph{Samples (promedio sobre instancias).}
+\[
+J_{samples}=\frac{1+\tfrac{1}{3}+\tfrac{1}{2}}{3}=\frac{11}{18}\approx 0{,}611.
+\]
+
+\emph{Macro (promedio sobre etiquetas).} Con $J_{L_1}=2/3$,
+$J_{L_2}=1$, $J_{L_3}=0$:
+\[
+J_{macro}=\frac{2/3+1+0}{3}\approx 0{,}556.
+\]
+
+\emph{Micro (cociente global).}
+\[
+J_{micro}=\frac{4}{4+2+1}=\frac{4}{7}\approx 0{,}571.
+\]
+
+\subsubsection{Exact Match Ratio}
+
+\textbf{Fórmula:}
 \[
 \mathrm{EMR}=\frac{1}{n}\sum_{i=1}^n \ind[\hat{Y}_i = Y_i].
 \]
 
-\paragraph{AUC multilabel.}
-Cuando el script dispone de scores continuos por etiqueta, también calcula \texttt{pr\_auc\_micro}, \texttt{pr\_auc\_macro}, \texttt{roc\_auc\_micro} y \texttt{roc\_auc\_macro}. Además, en el análisis por etiqueta se repiten precision, recall, $F_1$, Jaccard y, cuando corresponde, ROC-AUC y PR-AUC para cada CAPEC.
+\textbf{Utilidad.} También llamada \emph{subset accuracy}. Mide la
+proporción de instancias en las que la predicción multilabel coincide
+\emph{exactamente} con el conjunto verdadero. Es muy estricta: basta una
+etiqueta de más o de menos para que la instancia cuente como error.
+
+\textbf{Ejemplo.} En el ejemplo de referencia solo $i=1$ tiene
+predicción idéntica a la verdad; $i=2$ e $i=3$ difieren en alguna
+etiqueta:
+\[
+\mathrm{EMR}=\frac{1}{3}\approx 0{,}33.
+\]
+Notar que las instancias $i=2$ e $i=3$ aportan información parcial al
+Jaccard (0{,}33 y 0{,}50) pero cero al EMR.
+
+\subsubsection{ROC-AUC y PR-AUC multietiqueta}
+
+Cuando se dispone de scores continuos por etiqueta, se calculan las
+versiones \emph{micro} y \emph{macro} de ROC-AUC y PR-AUC tratando cada
+etiqueta como un problema binario independiente y luego agregando: la
+versión micro fusiona los scores de todas las etiquetas en una única
+curva global, mientras que la macro promedia las áreas calculadas por
+etiqueta.
+
+\textbf{Ejemplo.} Si las ROC-AUC por etiqueta fueran $\mathrm{AUC}_{L_1}=0{,}90$,
+$\mathrm{AUC}_{L_2}=0{,}95$ y $\mathrm{AUC}_{L_3}=0{,}55$, la versión
+macro sería
+\[
+\mathrm{ROC\text{-}AUC}_{macro}=\frac{0{,}90+0{,}95+0{,}55}{3}=0{,}80.
+\]
+La versión micro no se obtiene como promedio de estos tres números:
+requiere reagrupar los scores de las tres etiquetas en una única curva
+global y calcular el área de esa curva, así que en general
+$\mathrm{ROC\text{-}AUC}_{micro}\ne \mathrm{ROC\text{-}AUC}_{macro}$.
 
 \subsection{Métricas temporales y operativas}
-Además de las métricas predictivas, los scripts exportan o permiten reconstruir métricas operativas necesarias para discutir viabilidad.
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Tiempo de optimización de parámetros:}
-  \[
-  t_{opt}=t_{fin\_busqueda}-t_{inicio\_busqueda}.
-  \]
-  En los bloques con \texttt{GridSearchCV}, \texttt{RandomizedSearchCV} o \textit{halving}, coincide con el tiempo transcurrido de \texttt{search.fit(...)}; en el \textit{one-class}, con el tiempo total de evaluación de candidatos sobre el \textit{holdout} interno. Los scripts actuales ya miden este intervalo en consola y aquí se lo reporta como tiempo de optimización para mantener completo el bloque temporal del protocolo. Cuando una corrida se ejecuta con el ajuste de hiperparámetros desactivado, $t_{opt}$ no corresponde a una medición válida y debe leerse como \textit{no aplica}. En particular, la ablación multietiqueta con y sin tokens sospechosos fue implementada para ejecutar la variante ablacionada sin reoptimización adicional, salvo habilitación expresa de un re-ajuste. De ese modo, la diferencia entre la variante base y la variante ablacionada queda asociada a la retirada de ese grupo de variables y no a una nueva búsqueda de hiperparámetros. Si en algún cuadro de síntesis se fuerza un \texttt{0.00} para conservar la forma tabular, ese valor no describe un tiempo cronometrado nulo, sino la ausencia del bloque de búsqueda en esa corrida.
 
-  \item \textbf{Tiempo de construcción del modelo:}
-  \[
-  t_{build}=t_{fin\_fit}-t_{ini\_fit}.
-  \]
-  En la implementación se exporta como \texttt{train\_time\_seconds}.
+Además de medir efectividad predictiva, el trabajo considera métricas operativas porque un modelo útil en un entorno tipo WAF no solo debe clasificar bien: también debe responder con bajo costo y con tiempos compatibles con inspección de tráfico HTTP. Estas métricas se relacionan con la viabilidad práctica del pipeline.
 
-  \item \textbf{Tiempo de aplicación del modelo:}
-  se mide en el benchmark como tiempo total del lazo de evaluación:
-  \[
-  t_{apply}=\texttt{wall\_time\_seconds}.
-  \]
-  Este valor se complementa con latencias por request para separar el costo de extracción de features y el costo de inferencia.
+\paragraph{Tiempo de optimización de parámetros.}
+La optimización de hiperparámetros consiste en probar configuraciones del modelo antes de elegir la variante final. Es importante medirla porque puede mejorar el rendimiento, pero también aumenta el costo experimental. Si una mejora pequeña requiere una búsqueda demasiado larga, esa configuración puede ser poco conveniente para un flujo reproducible o para reentrenamientos frecuentes.
+\[
+t_{opt}=t_{fin\_busqueda}-t_{inicio\_busqueda}.
+\]
 
-  \item \textbf{Throughput:}
-  \[
-  \mathrm{Throughput}=\frac{\texttt{successful\_requests}}{\texttt{wall\_time\_seconds}}.
-  \]
+Cuando una corrida no realiza búsqueda de hiperparámetros, este tiempo no aplica. En ese caso no debe interpretarse como que optimizar cuesta cero, sino como que esa etapa no fue ejecutada en esa corrida.
 
-  \item \textbf{Tasa de solicitudes fallidas del benchmark:}
-  este indicador no describe un ``fallo del modelo'' ni un error de clasificación, sino la proporción de solicitudes que no pudieron completarse correctamente durante la medición operativa del benchmark.
-  \[
-  \mathrm{Tasa\ de\ solicitudes\ fallidas}=\frac{\texttt{failures}}{\texttt{total\_requests\_measured}}.
-  \]
-  En todas las tablas operativas de este libro, esta métrica se interpreta como un indicador de estabilidad de la corrida de benchmark y no como una medida de desempeño predictivo.
+\paragraph{Tiempo de construcción del modelo.}
+Mide el tiempo usado por el ajuste final del modelo:
+\[
+t_{build}=t_{fin\_fit}-t_{inicio\_fit}.
+\]
 
-  \item \textbf{Latencias total, de extracción y de inferencia:}
-  cada request medida produce un tiempo total y, cuando corresponde, un desglose en extracción de features e inferencia. A partir de esos vectores se exportan media, desvío estándar y percentiles P50, P95 y P99.
+Esta métrica permite comparar cuánto cuesta construir cada modelo una vez fijada su configuración.
 
-  \item \textbf{CPU aproximada:}
-  \[
-  \mathrm{CPU\ util\%}\approx 100\cdot\frac{\Delta(\texttt{user}+\texttt{system})}{\texttt{wall\_time\_seconds}}.
-  \]
+\paragraph{Tiempo de aplicación.}
+Mide el tiempo total empleado por el benchmark para procesar un conjunto de peticiones:
+\[
+t_{apply}=\mathrm{wall\_time\_seconds}.
+\]
 
-  \item \textbf{Memoria y tamaño de modelo:} se registran \texttt{rss\_mb\_before}, \texttt{rss\_mb\_after}, \texttt{peak\_rss\_mb\_approx} y \texttt{model\_size\_bytes}.
-\end{itemize}
+Este valor se interpreta junto con las latencias por petición, porque el tiempo total del benchmark puede depender de cuántas peticiones fueron medidas.
+
+\paragraph{Throughput.}
+Indica cuántas peticiones se procesan por segundo:
+\[
+\mathrm{Throughput}=\frac{\mathrm{successful\_requests}}{\mathrm{wall\_time\_seconds}}.
+\]
+
+Un throughput mayor sugiere mayor capacidad de procesamiento, aunque debe leerse junto con latencia y estabilidad.
+
+\paragraph{Latencia.}
+La latencia mide cuánto tarda una petición individual en atravesar el pipeline de extracción de características e inferencia. Se reportan percentiles como P50, P95 y P99. P95 es especialmente útil porque indica que el 95\% de las peticiones medidas terminó por debajo de ese tiempo; por tanto, ayuda a observar el comportamiento de cola y no solo el promedio.
+
+\paragraph{Estabilidad del benchmark.}
+La tasa de solicitudes fallidas durante el benchmark no describe errores de clasificación, sino fallos de ejecución o medición durante la prueba operativa:
+\[
+\mathrm{Tasa\ de\ fallos}=\frac{\mathrm{failures}}{\mathrm{total\_requests\_measured}}.
+\]
+
+\paragraph{Uso de CPU, memoria y tamaño de modelo.}
+El uso aproximado de CPU puede estimarse como:
+\[
+\mathrm{CPU\ util\ \%}\approx 100\cdot \frac{\Delta(\mathrm{user}+\mathrm{system})}{\mathrm{wall\_time\_seconds}}.
+\]
+
+La memoria y el tamaño del modelo permiten evaluar si la solución es liviana o costosa para despliegues futuros. En conjunto, estas métricas ayudan a decidir si un modelo con buen rendimiento predictivo también es razonable desde el punto de vista operativo.
 
 \subsection{Diccionario resumido de métricas retenidas}
-\footnotesize
-\begin{longtable}{@{}>{\RaggedRight\arraybackslash}p{3.2cm}>{\RaggedRight\arraybackslash}p{6.2cm}>{\RaggedRight\arraybackslash}p{4.1cm}@{}}
+
+\begin{longtable}{@{}L{0.24\textwidth}L{0.43\textwidth}L{0.25\textwidth}@{}}
+\caption{Diccionario resumido de métricas utilizadas en la evaluación.}\label{tab:diccionario-metricas}\\
 \toprule
-\textbf{Métrica} & \textbf{Cálculo en la implementación} & \textbf{Uso principal} \\
+\textbf{Métrica} & \textbf{Qué mide} & \textbf{Uso principal} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Métrica} & \textbf{Cálculo en la implementación} & \textbf{Uso principal} \\
+\textbf{Métrica} & \textbf{Qué mide} & \textbf{Uso principal} \\
 \midrule
 \endhead
 Accuracy & Proporción de predicciones correctas: $\frac{1}{n}\sum_i \ind[\hat y_i=y_i]$. & Multiclase y casos reducidos a dos clases. \\
@@ -620,7 +1257,6 @@ Tiempo de construcción & \texttt{train\_time\_seconds}, medido alrededor de \te
 Tiempo de aplicación & \texttt{wall\_time\_seconds} del benchmark operativo. & Todos los modelos. \\
 \bottomrule
 \end{longtable}
-\normalsize
 
 
 % ============================================================================
