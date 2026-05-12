@@ -681,11 +681,7 @@ Tiempo de aplicación & \texttt{wall\_time\_seconds} del benchmark operativo. & 
 % ============================================================================
 % CAPÍTULO 4
 % ============================================================================
-\chapter{Datasets y criterios de selección}
-
-\section{CAPEC como esquema semántico de ataques}
-CAPEC es un catálogo mantenido por MITRE que describe patrones de ataque (``cómo'' se explota una debilidad),
-y se utiliza como taxonomía para clasificar ataques \cite{capec_home,capec_about}.
+\chapter{Estado del arte y trabajos relacionados}
 
 \section{SR-BH 2020: tráfico real de honeypot con etiquetas CAPEC}
 SR-BH 2020 fue recolectado en un servidor WordPress expuesto a Internet; su publicación y descripción técnica están disponibles
@@ -716,7 +712,7 @@ Para poder entrenar/evaluar con el mismo pipeline, CSIC y TorpEda se transforman
 
 En todos los datasets, para el caso \textit{one-class} se trata todo lo no-normal como anomalía (tarea \textbf{binaria}). Para las tareas supervisadas, la granularidad depende del dataset: \textbf{CSIC~2010} provee únicamente \textit{normal/anómalo}, por lo que las configuraciones multiclase/multietiqueta se evalúan en su \textit{versión reducida} (binaria); \textbf{TorpEda~2012} preserva sus etiquetas \textit{multiclase} nativas (tipo de ataque) y además permite el colapso a binario cuando corresponda; \textbf{SR-BH~2020} habilita binario, multiclase (vía etiqueta CAPEC primaria) y multietiqueta CAPEC.
 
-\subsection{comparativa de la tríada de datasets}
+\subsection{Comparativa de la tríada de datasets}
 El diseño experimental conserva los tres datasets porque cada uno aporta una pieza distinta de evidencia metodológica. \textbf{SR-BH~2020} se usa como referencia principal de \textbf{realismo}, ya que contiene tráfico real de honeypot y etiquetas CAPEC multietiqueta \cite{srbh_dataverse,srbh_paper}. \textbf{CSIC~2010} y \textbf{TorpEda~2012} se mantienen porque siguen siendo puntos de comparación frecuentes en detección de ataques web, ofrecen escenarios más controlados y permiten contrastar cuánto del rendimiento observado depende del dataset y cuánto del modelo \cite{csic2010_impact,csic2010_doc,torpeda_2012}. En otras palabras, la tríada se elige para cubrir simultáneamente \textbf{realismo}, \textbf{comparabilidad con la literatura} y \textbf{variación en granularidad de etiquetas}; quitar cualquiera de los tres debilitaría alguna de esas dimensiones.
 
 \subsection{Reducción multietiqueta a multiclase}
@@ -725,7 +721,7 @@ En SR-BH una request puede tener múltiples etiquetas CAPEC. Para definir una ta
 % ============================================================================
 % CAPÍTULO 5
 % ============================================================================
-\chapter{Representación de las peticiones HTTP}
+\chapter{Metodología propuesta}
 
 \section{Principio general}
 La elección de features busca capturar:
@@ -820,7 +816,7 @@ El conjunto completo combina señales estructurales, de tamaño, de codificació
 % ============================================================================
 % CAPÍTULO 6
 % ============================================================================
-\chapter{Metodología y diseño experimental}
+\chapter{Diseño experimental}
 
 \section{Tareas definidas}
 \begin{itemize}[leftmargin=*]
@@ -889,17 +885,32 @@ Para el detector one-class, la política debe respetar dos condiciones: (i) entr
 Con ello se elimina el principal riesgo metodológico de este tipo de detector: usar el mismo conjunto mixto tanto para escoger hiperparámetros como para reportar métricas finales, y además se aprovechan \textbf{todas las anomalías/ataques disponibles} en la evaluación final.
 
 \section{Modelos seleccionados}
-Se mantienen las tres familias metodológicas definidas para el estudio, con una implementación ajustada para conservar compatibilidad con datasets muy grandes.
+Se mantienen las tres familias metodológicas definidas para el estudio, con una implementación ajustada para conservar compatibilidad con datasets muy grandes. La lógica de selección no es ``usar el modelo más complejo disponible'', sino elegir un conjunto de referencias que permita responder las preguntas del estudio con \textbf{trazabilidad}, \textbf{comparabilidad} y \textbf{factibilidad computacional}. Modelos más complejos, incluyendo enfoques recientes basados en redes profundas, son útiles como contexto de literatura, pero no necesariamente como \textit{baseline} principal cuando el objetivo incluye interpretabilidad, evaluación cruzada entre datasets y ejecución sobre volúmenes del orden de $10^6$ peticiones \cite{fang_2024,zhou_2024}.
 
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Detector one-class principal:} \texttt{StandardScaler + Nystroem + SGDOneClassSVM}. Se elige por su escalabilidad y porque preserva el supuesto de entrenar solo con tráfico normal \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}.
-  \item \textbf{Baseline supervisado principal:} regresión logística lineal, preferentemente con \texttt{solver=saga} o configuración equivalente eficiente en gran escala, por su interpretabilidad, costo controlado y solidez como referencia supervisada \cite{islr_logreg,sklearn_logreg}.
-  \item \textbf{Baseline multietiqueta:} \texttt{OneVsRest(LogisticRegression)} con el mismo criterio de escalabilidad y reproducibilidad; se adopta porque OvR es una descomposición estándar y defendible cuando interesa conservar trazabilidad por etiqueta \cite{tsoumakas_multilabel_overview,rifkin_ova,sklearn_logreg}.
-\end{itemize}
+\subsection{Detector one-class escalable}
 
-La lógica de selección no es ``usar el modelo más complejo disponible'', sino elegir un conjunto de referencias que permita responder las preguntas del estudio con \textbf{trazabilidad}, \textbf{comparabilidad} y \textbf{factibilidad computacional}. Modelos más complejos, incluyendo enfoques recientes basados en redes profundas, son útiles como contexto de literatura, pero no necesariamente como \textit{baseline} principal cuando el objetivo incluye interpretabilidad, evaluación cruzada entre datasets y ejecución sobre volúmenes del orden de $10^6$ requests \cite{fang_2024,zhou_2024}.
+\subsubsection{Justificación del enfoque one-class}
+El uso de un detector \textit{one-class} se justifica en este trabajo por dos razones complementarias. En primer lugar, permite entrenar el modelo exclusivamente con tráfico normal y detectar como anómalas las peticiones que se desvían de ese soporte aprendido. Esto resulta útil cuando no se dispone de un catálogo completo de ataques etiquetados, situación frecuente en entornos reales donde los atacantes generan constantemente variantes nuevas. En segundo lugar, este enfoque mantiene coherencia con la motivación original de los WAF basados en anomalías: aprender qué aspecto tiene el tráfico legítimo y señalar desviaciones, sin depender de un inventario fijo de patrones maliciosos \cite{kruegel_vigna_2003}.
 
-Esta selección conserva las tres formulaciones analíticas definidas para el estudio y evita que el costo computacional del modelo y del 	extit{tuning} invalide experimentalmente el protocolo.
+\subsubsection{Justificación de la variante escalable}
+La formulación clásica del One-Class SVM \cite{scholkopf2001} resuelve un problema de optimización cuadrática cuyo costo crece de manera cuadrática o cúbica con el número de ejemplos, lo que lo hace impracticable para datasets del orden de $10^5$ a $10^6$ peticiones. Por este motivo se adopta una variante escalable basada en descenso de gradiente estocástico (SGD), que mantiene el mismo principio conceptual —aprender la frontera del soporte normal— pero con un costo de entrenamiento lineal en el número de ejemplos \cite{sklearn_sgd_ocsvm}. Para conservar la capacidad de capturar relaciones no lineales entre características, se agrega una aproximación de kernel mediante el método de Nyström \cite{williams2001,sklearn_kernel_approx}, que transforma explícitamente el espacio de características antes de aplicar el detector lineal.
+
+\subsubsection{Pipeline concreto adoptado}
+La implementación seleccionada para todas las corridas one-class del estudio es el siguiente pipeline en tres etapas:
+\[
+\texttt{StandardScaler} \;\rightarrow\; \texttt{Nystroem} \;\rightarrow\; \texttt{SGDOneClassSVM}.
+\]
+Sea $x \in \mathbb{R}^d$ el vector de características de una petición HTTP. La primera etapa escala cada característica a media cero y varianza unitaria. La segunda aplica una transformación explícita $z(x) \in \mathbb{R}^m$ mediante la aproximación de Nyström, que aproxima el mapa de características asociado a un kernel RBF. La tercera etapa aprende un hiperplano en ese espacio transformado que separa el tráfico normal del origen:
+\[
+f(x)=\operatorname{sign}\big(w^\top z(x)-\rho\big).
+\]
+Las peticiones con $f(x) < 0$ se clasifican como anómalas. Esta formulación preserva el supuesto central del enfoque ---entrenar solo con tráfico normal--- y mantiene el costo de entrenamiento e inferencia en un rango compatible con el tamaño de los datasets utilizados \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}.
+
+\subsection{Baseline supervisado: regresión logística lineal}
+Se adopta regresión logística lineal como \textit{baseline} supervisado principal, preferentemente con \texttt{solver=lbfgs} o configuración equivalente eficiente, por su interpretabilidad mediante coeficientes, su costo computacional controlado y su solidez como referencia supervisada en la literatura \cite{islr_logreg,sklearn_logreg}.
+
+\subsection{Baseline multietiqueta: One-vs-Rest}
+Para la formulación multietiqueta se utiliza \texttt{OneVsRestClassifier} sobre regresión logística lineal. OvR es una descomposición estándar y metodológicamente defendible cuando interesa conservar trazabilidad por etiqueta y mantener interpretabilidad de los coeficientes por clase \cite{tsoumakas_multilabel_overview,rifkin_ova,sklearn_logreg}.
 
 \section{Selección de hiperparámetros (Grid/Random Search) y validación}
 La metodología incorpora un módulo de \textit{tuning} para alinear el pipeline con buenas prácticas experimentales, pero lo redefine para que no domine el costo total de ejecución. La política general es: \textbf{toda selección se hace solo dentro del bloque de entrenamiento} y con un \textbf{presupuesto computacional fijo} \cite{sklearn_randomsearch,sklearn_halving}.
@@ -928,7 +939,23 @@ La metodología incorpora un módulo de \textit{tuning} para alinear el pipeline
 Las corridas incorporadas en los resultados finales siguen una parametrización homogénea por familia de modelos. La regularidad entre datasets no se utilizó solo como criterio de orden, sino como condición para sostener comparaciones transversales defendibles: cuando la tarea cambia, cambia la granularidad de la etiqueta; cuando la familia del modelo se mantiene, también se mantienen la lógica de particionado, el presupuesto de búsqueda y el bloque operativo de benchmark.
 
 \subsection{Construcción y preparación de los datasets}
-Los tres datasets se procesan sobre una representación común de features HTTP. En CSIC~2010 y CSIC/TorpEda~2012 se conserva el uso de información de cabeceras cuando está disponible, mientras que en SR-BH~2020 se mantiene el preprocesamiento compatible con separadores heterogéneos. El criterio adoptado es preservar un esquema de entrada comparable entre fuentes con distinto origen, sin introducir una definición distinta de features para cada dataset. De ese modo, las diferencias observadas en resultados quedan asociadas principalmente al realismo del tráfico, a la granularidad de las etiquetas y a la familia del modelo, y no a una representación de entrada completamente distinta.
+Los tres datasets se procesan sobre una representación común de características HTTP. En CSIC~2010 y CSIC/TorpEda~2012 se conserva el uso de información de cabeceras cuando está disponible, mientras que en SR-BH~2020 se mantiene el preprocesamiento compatible con separadores heterogéneos. El criterio adoptado es preservar un esquema de entrada comparable entre fuentes con distinto origen, sin introducir una definición distinta de características para cada dataset. De ese modo, las diferencias observadas en resultados quedan asociadas principalmente al realismo del tráfico, a la granularidad de las etiquetas y a la familia del modelo, y no a una representación de entrada completamente distinta.
+
+\subsection{Correspondencia entre representación y variables objetivo}
+
+\subsubsection{Vector de características}
+En la implementación, cada petición HTTP se representa como un vector fijo de 25 características numéricas ($d = 25$), construido a partir de cuatro campos del protocolo: método HTTP, URI, cuerpo (\textit{body}) y, cuando está disponible, un campo derivado de encabezados (\texttt{req\_content\_length}). Las características cubren longitudes, estructura de la URI, composición de caracteres, grado de \textit{percent-encoding}, indicadores heurísticos basados en tokens sospechosos y una codificación \textit{one-hot} del método. El detalle de cada característica se presenta en el capítulo de representación de peticiones HTTP.
+
+En el caso de SR-BH~2020, el dataset publicado originalmente incluye 24 características; en la versión adoptada para este estudio se recalcula el esquema completo y se agrega la característica \texttt{req\_content\_length} derivada de encabezados, unificando el conjunto en 25 para mantener comparabilidad con los demás datasets.
+
+\subsubsection{Variables objetivo}
+Las variables de salida utilizadas en los experimentos corresponden a tres formulaciones del problema, derivadas de la información de etiquetado disponible en cada dataset:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{label\_binary}:} variable binaria (0 = normal, 1 = ataque o anomalía). Disponible en los tres datasets.
+  \item \textbf{\texttt{label\_multiclass}:} variable con una única clase por petición. En TorpEda~2012 corresponde a las clases nativas por tipo de ataque. En SR-BH~2020 se deriva desde la anotación multietiqueta CAPEC mediante una política determinista basada en severidad: se selecciona como clase primaria la etiqueta CAPEC con mayor nivel de severidad entre las activas en esa petición; si no hay etiquetas activas, la instancia queda como \texttt{NORMAL}. Para trazabilidad, el dataset procesado conserva columnas auxiliares \texttt{label\_multiclass\_first} y \texttt{label\_primary\_severity}. En CSIC~2010, donde no existe taxonomía por tipo de ataque, esta variable queda reducida de hecho a un esquema binario.
+  \item \textbf{\texttt{label\_multilabel}:} vector binario de longitud $L$ (cantidad de etiquetas CAPEC posibles), donde cada componente indica si la petición activa esa etiqueta. Disponible plenamente en SR-BH~2020. En los demás datasets, la formulación multietiqueta se ejecuta en modo reducido según la granularidad efectivamente disponible.
+\end{itemize}
 
 \subsection{Detector one-class en CSIC~2010, CSIC/TorpEda~2012 y SR-BH~2020}
 La familia \textit{one-class} se ejecuta en los tres datasets como problema binario \textit{normal vs. anómalo}, manteniendo una misma estructura: escalado, aproximación de kernel mediante Nyström y detector \texttt{SGDOneClassSVM}. El particionado conserva \textbf{80/20} sobre tráfico normal, con \textbf{semilla 42}, de modo que el ajuste se realiza exclusivamente con normales y la evaluación final utiliza el \textit{holdout} de normales junto con el total de anomalías o ataques disponibles. La búsqueda de hiperparámetros se limita a un presupuesto aleatorio pequeño sobre cuatro ejes: fracción esperada de outliers, escala del kernel aproximado, dimensionalidad de la aproximación y número máximo de iteraciones.
@@ -968,7 +995,7 @@ Dado que uno de los objetivos es comparar con trabajos relacionados, se seleccio
   \item \textbf{Eficiencia/tiempo real:} latencia media y percentiles P50/P95/P99 del pipeline (extracción de features + inferencia), throughput (req/s), tasa de fallos, CPU/RAM, tamaño del modelo y desagregación entre extracción e inferencia. Estas métricas se incluyen porque la evaluación no solo considera efectividad, sino también viabilidad operativa en un entorno tipo WAF \cite{ocswaf_zenodo}.
 \end{itemize}
 
-El detalle formal de cada métrica y de su cálculo exacto dentro de la implementación se resume en la Sección~3.5.
+El detalle formal de cada métrica y de su cálculo exacto se encuentra en la sección de fundamentos matemáticos del Marco teórico.
 
 \section{Criterios de comparación con la literatura}
 Comparar resultados entre papers puede ser engañoso si difieren \textit{splits}, preprocesamiento o definición de etiquetas. Para maximizar comparabilidad:
@@ -1082,7 +1109,7 @@ La implementación conserva además una columna auxiliar \texttt{label\_multicla
 Desde el punto de vista metodológico, esta política se usa solo para habilitar una tarea adicional de comparación. La salida multietiqueta sigue siendo la representación más fiel del fenómeno cuando una misma request participa de más de un patrón CAPEC. Por eso, en la discusión de resultados, la lectura multiclase se interpreta como una simplificación útil para contraste experimental, no como sustituto de la anotación original.
 
 
-\chapter{Resultados}
+\chapter{Resultados y discusión}
 
 \section{Criterio de presentación}
 El capítulo de resultados adopta una organización estrictamente tabular por tarea, dataset y variante de modelo. La decisión responde a dos necesidades simultáneas. Por un lado, resulta necesario comparar enfoques \textit{one-class}, multiclase y multietiqueta sobre CSIC 2010, CSIC/TorpEda 2012 y SR-BH 2020, con métricas adecuadas a cada formulación y con una discusión explícita de factibilidad tipo WAF. Por otro lado, el propio protocolo metodológico del estudio establece que la comparación debe mantener separados entrenamiento, ajuste y prueba, y que además del rendimiento predictivo deben informarse tiempos, latencias, \textit{throughput}, consumo de recursos y tamaño del modelo.\
@@ -1302,13 +1329,13 @@ Desde una lectura estrictamente operacional, el cuello de botella más severo de
 
 La consecuencia práctica es que la factibilidad teórica sí puede defenderse, pero de forma condicionada. Si el objetivo fuera un componente liviano y de baja latencia para clasificación de ataques con etiqueta única, las variantes multiclase resultan las candidatas más naturales. Si el objetivo fuera una alarma de anomalía entrenada solo con normales, el esquema one-class sigue siendo defendible, aunque con un costo de memoria que debe declararse. Si lo que se busca es conservar la semántica CAPEC multietiqueta de SR-BH 2020, entonces la formulación multietiqueta es la más fiel al problema, pero no la más barata de desplegar.\
 
-\chapter{Conclusiones y trabajo futuro}
+\chapter{Conclusiones}
 
 \section{Conclusiones}
 
 \mbox{}
 
-\section{Trabajos futuros}
+\chapter{Trabajos futuros}
 
 \mbox{}
 
