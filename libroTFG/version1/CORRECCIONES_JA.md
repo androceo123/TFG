@@ -147,6 +147,8 @@
 
 ---
 
+agregue definicion de capec y quite la parte que hablaba de implementacion en la parte teorica
+
 ## Qué NO se modificó
 
 - Capítulos de Resultados y discusión, Implementación (pipeline) y Protocolo de evaluación WAF: conservados intactos (correcciones de Andrés).
