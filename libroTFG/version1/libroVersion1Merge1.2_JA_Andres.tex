@@ -151,6 +151,99 @@ Extendemos nuestro reconocimiento a la Facultad Politécnica de la Universidad N
 \tableofcontents
 \listoffigures
 \clearpage
+\chapter*{Tabla de símbolos y notación general}
+\phantomsection
+\addcontentsline{toc}{chapter}{Tabla de símbolos y notación general}
+\label{sec:tabla-simbolos}
+La siguiente tabla se ubica al comienzo del documento para facilitar la consulta de la notación usada en los capítulos teóricos, metodológicos y experimentales. Incluye símbolos de datasets, modelos, métricas predictivas y métricas operativas.
+
+{\footnotesize
+\renewcommand{\arraystretch}{1.1}
+\begin{longtable}{@{}L{4.8cm}L{10.4cm}@{}}
+\toprule
+\textbf{Símbolo} & \textbf{Significado exacto} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Símbolo} & \textbf{Significado exacto} \\
+\midrule
+\endhead
+\multicolumn{2}{@{}l}{\textit{Dataset y dimensiones}}\\
+$n$ & cantidad total de requests del dataset \\
+$d$ & cantidad de features numéricas por request \\
+$K$ & cantidad de clases en multiclase \\
+$L$ & cantidad de etiquetas en multietiqueta \\
+$x_i \in \R^d$ & features de la request $i$ \\
+$X \in \R^{n\times d}$ & matriz con todas las requests (filas) y features (columnas) \\
+$y_i$ & etiqueta (binaria o multiclase) de la request $i$ \\
+$y \in \{0,1\}^n$ & vector de etiquetas binarias de todas las requests \\
+$y \in \{1,\dots,K\}^n$ & vector de etiquetas multiclase de todas las requests \\
+$y_i \in \{0,1\}^L$ & vector de etiquetas (multietiqueta) para la request $i$ \\
+$y_{i\ell}$ & componente $\ell$ del vector multietiqueta de la request $i$ \\
+$Y \in \{0,1\}^{n\times L}$ & matriz multietiqueta para todo el dataset \\
+$\hat{y}, \hat{Y}$ & predicciones del modelo \\
+$\ind[\cdot]$ & función indicadora \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Detector one-class}}\\
+$f(x)$ & función de decisión del detector one-class \\
+$z(x)$ & transformación de $x$ al espacio inducido por el kernel \\
+$w$ & vector de pesos que define la orientación de la frontera \\
+$\rho$ & umbral de separación de la frontera one-class \\
+$\operatorname{sign}(\cdot)$ & función signo aplicada a la puntuación de normalidad \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Regresión logística (binaria y multiclase)}}\\
+$z$ & puntaje lineal $z=w^\top x + b$ \\
+$b$ & sesgo (intercepto) del modelo lineal \\
+$\sigma(z)$ & función sigmoide, $\sigma(z)=1/(1+e^{-z})$ \\
+$P(y=1\mid x)$ & probabilidad estimada de la clase positiva \\
+$p_i$ & probabilidad estimada $P(y=1\mid x_i)$ para la request $i$ \\
+$\mathcal{L}(w,b)$ & función de pérdida (log-loss / entropía cruzada) \\
+$\lambda$ & coeficiente de regularización $L_2$ \\
+$\lVert w\rVert^2$ & norma euclídea al cuadrado del vector de pesos \\
+$s_k(x)$ & puntaje lineal de la clase $k$: $s_k(x)=w_k^\top x + b_k$ \\
+$w_k,\ b_k$ & pesos y sesgo asociados a la clase $k$ \\
+$P(y=k\mid x)$ & probabilidad estimada de pertenecer a la clase $k$ (softmax) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{One-vs-Rest (multietiqueta)}}\\
+$w_\ell,\ b_\ell$ & pesos y sesgo del clasificador binario para la etiqueta $\ell$ \\
+$P(y_\ell=1\mid x)$ & probabilidad estimada de la etiqueta $\ell$ \\
+$\tau_\ell$ & umbral de decisión binaria para la etiqueta $\ell$ \\
+$\hat{y}_\ell$ & predicción binaria final para la etiqueta $\ell$ \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas binarias}}\\
+$TP,\ FP,\ FN,\ TN$ & verdaderos/falsos positivos y verdaderos/falsos negativos \\
+$\mathrm{TPR}$ & tasa de verdaderos positivos (recall), $TP/(TP+FN)$ \\
+$\mathrm{TNR}$ & tasa de verdaderos negativos (specificity), $TN/(TN+FP)$ \\
+$\mathrm{FPR}$ & tasa de falsos positivos, $FP/(FP+TN)=1-\mathrm{TNR}$ \\
+$\mathrm{FNR}$ & tasa de falsos negativos, $FN/(FN+TP)=1-\mathrm{TPR}$ \\
+$F_1$ & media armónica de precision y recall \\
+$\mathrm{MCC}$ & coeficiente de correlación de Matthews \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas multiclase}}\\
+$TP_k,\ FP_k,\ FN_k$ & conteos one-vs-rest correspondientes a la clase $k$ \\
+$\mathrm{Precision}_k,\ \mathrm{Recall}_k,\ F_{1,k}$ & métricas calculadas sobre la clase $k$ \\
+$s_k$ & soporte de la clase $k$, con $\sum_k s_k = n$ \\
+$F_{1,micro},\ F_{1,macro},\ F_{1,weighted}$ & promedios micro, macro y ponderado del $F_1$ \\
+$\mathrm{AUC}_k$ & ROC-AUC one-vs-rest de la clase $k$ \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas multietiqueta}}\\
+$TP_\ell,\ FP_\ell,\ FN_\ell$ & conteos por etiqueta $\ell$ sobre las celdas $(i,\ell)$ \\
+$Y_i,\ \hat{Y}_i$ & conjuntos de etiquetas verdaderas y predichas de la request $i$ \\
+$J_i$ & Jaccard por instancia, $|Y_i\cap\hat{Y}_i|/|Y_i\cup\hat{Y}_i|$ \\
+$J_{samples},\ J_{micro},\ J_{macro}$ & agregaciones del Jaccard por muestra, micro y macro \\
+$\mathrm{HL}$ & Hamming Loss \\
+$\mathrm{EMR}$ & Exact Match Ratio (subset accuracy) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Métricas temporales y operativas}}\\
+$t_{opt}$ & tiempo total del bloque de búsqueda de hiperparámetros \\
+$t_{build}$ & tiempo de construcción o entrenamiento final del modelo \\
+$t_{apply}$ & tiempo total de aplicación del flujo entrenado sobre el conjunto medido \\
+$\mathrm{Throughput}$ & peticiones procesadas por segundo durante la medición operativa \\
+\bottomrule
+\end{longtable}
+}
+
+\clearpage
 \pagenumbering{arabic}
 
 % ============================================================================
@@ -354,93 +447,6 @@ Además, usamos:
   \item $\hat{y}$ o $\hat{Y}$: predicciones del modelo (mismo tipo/forma que $y$ o $Y$).
   \item $\ind[\cdot]$: función indicadora; vale 1 si la condición es verdadera y 0 si es falsa.
 \end{itemize}
-
-\subsubsection{Tabla de símbolos (resumen)}
-{\footnotesize
-\renewcommand{\arraystretch}{1.1}
-\begin{longtable}{@{}L{3.6cm}L{11.6cm}@{}}
-\toprule
-\textbf{Símbolo} & \textbf{Significado exacto} \\
-\midrule
-\endfirsthead
-\toprule
-\textbf{Símbolo} & \textbf{Significado exacto} \\
-\midrule
-\endhead
-\multicolumn{2}{@{}l}{\textit{Dataset y dimensiones}}\\
-$n$ & cantidad total de requests del dataset \\
-$d$ & cantidad de features numéricas por request \\
-$K$ & cantidad de clases en multiclase \\
-$L$ & cantidad de etiquetas en multietiqueta \\
-$x_i \in \R^d$ & features de la request $i$ \\
-$X \in \R^{n\times d}$ & matriz con todas las requests (filas) y features (columnas) \\
-$y_i$ & etiqueta (binaria o multiclase) de la request $i$ \\
-$y \in \{0,1\}^n$ & vector de etiquetas binarias de todas las requests \\
-$y \in \{1,\dots,K\}^n$ & vector de etiquetas multiclase de todas las requests \\
-$y_i \in \{0,1\}^L$ & vector de etiquetas (multietiqueta) para la request $i$ \\
-$y_{i\ell}$ & componente $\ell$ del vector multietiqueta de la request $i$ \\
-$Y \in \{0,1\}^{n\times L}$ & matriz multietiqueta para todo el dataset \\
-$\hat{y}, \hat{Y}$ & predicciones del modelo \\
-$\ind[\cdot]$ & función indicadora \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Detector one-class}}\\
-$f(x)$ & función de decisión del detector one-class \\
-$z(x)$ & transformación de $x$ al espacio inducido por el kernel \\
-$w$ & vector de pesos que define la orientación de la frontera \\
-$\rho$ & umbral de separación de la frontera one-class \\
-$\operatorname{sign}(\cdot)$ & función signo aplicada a la puntuación de normalidad \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Regresión logística (binaria y multiclase)}}\\
-$z$ & puntaje lineal $z=w^\top x + b$ \\
-$b$ & sesgo (intercepto) del modelo lineal \\
-$\sigma(z)$ & función sigmoide, $\sigma(z)=1/(1+e^{-z})$ \\
-$P(y=1\mid x)$ & probabilidad estimada de la clase positiva \\
-$p_i$ & probabilidad estimada $P(y=1\mid x_i)$ para la request $i$ \\
-$\mathcal{L}(w,b)$ & función de pérdida (log-loss / entropía cruzada) \\
-$\lambda$ & coeficiente de regularización $L_2$ \\
-$\lVert w\rVert^2$ & norma euclídea al cuadrado del vector de pesos \\
-$s_k(x)$ & puntaje lineal de la clase $k$: $s_k(x)=w_k^\top x + b_k$ \\
-$w_k,\ b_k$ & pesos y sesgo asociados a la clase $k$ \\
-$P(y=k\mid x)$ & probabilidad estimada de pertenecer a la clase $k$ (softmax) \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{One-vs-Rest (multietiqueta)}}\\
-$w_\ell,\ b_\ell$ & pesos y sesgo del clasificador binario para la etiqueta $\ell$ \\
-$P(y_\ell=1\mid x)$ & probabilidad estimada de la etiqueta $\ell$ \\
-$\tau_\ell$ & umbral de decisión binaria para la etiqueta $\ell$ \\
-$\hat{y}_\ell$ & predicción binaria final para la etiqueta $\ell$ \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Métricas binarias}}\\
-$TP,\ FP,\ FN,\ TN$ & verdaderos/falsos positivos y verdaderos/falsos negativos \\
-$\mathrm{TPR}$ & tasa de verdaderos positivos (recall), $TP/(TP+FN)$ \\
-$\mathrm{TNR}$ & tasa de verdaderos negativos (specificity), $TN/(TN+FP)$ \\
-$\mathrm{FPR}$ & tasa de falsos positivos, $FP/(FP+TN)=1-\mathrm{TNR}$ \\
-$\mathrm{FNR}$ & tasa de falsos negativos, $FN/(FN+TP)=1-\mathrm{TPR}$ \\
-$F_1$ & media armónica de precision y recall \\
-$\mathrm{MCC}$ & coeficiente de correlación de Matthews \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Métricas multiclase}}\\
-$TP_k,\ FP_k,\ FN_k$ & conteos one-vs-rest correspondientes a la clase $k$ \\
-$\mathrm{Precision}_k,\ \mathrm{Recall}_k,\ F_{1,k}$ & métricas calculadas sobre la clase $k$ \\
-$s_k$ & soporte de la clase $k$, con $\sum_k s_k = n$ \\
-$F_{1,micro},\ F_{1,macro},\ F_{1,weighted}$ & promedios micro, macro y ponderado del $F_1$ \\
-$\mathrm{AUC}_k$ & ROC-AUC one-vs-rest de la clase $k$ \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Métricas multietiqueta}}\\
-$TP_\ell,\ FP_\ell,\ FN_\ell$ & conteos por etiqueta $\ell$ sobre las celdas $(i,\ell)$ \\
-$Y_i,\ \hat{Y}_i$ & conjuntos de etiquetas verdaderas y predichas de la request $i$ \\
-$J_i$ & Jaccard por instancia, $|Y_i\cap\hat{Y}_i|/|Y_i\cup\hat{Y}_i|$ \\
-$J_{samples},\ J_{micro},\ J_{macro}$ & agregaciones del Jaccard por muestra, micro y macro \\
-$\mathrm{HL}$ & Hamming Loss \\
-$\mathrm{EMR}$ & Exact Match Ratio (subset accuracy) \\
-\midrule
-\multicolumn{2}{@{}l}{\textit{Métricas temporales y operativas}}\\
-$t_{opt}$ & tiempo total del bloque de búsqueda de hiperparámetros \\
-$t_{build}$ & tiempo de ajuste final del modelo (\texttt{train\_time\_seconds}) \\
-$t_{apply}$ & tiempo total del benchmark operativo (\texttt{wall\_time\_seconds}) \\
-$\mathrm{Throughput}$ & requests procesados por segundo durante el benchmark \\
-\bottomrule
-\end{longtable}
-}
 
 \subsection{Detector one-class escalable}
 
@@ -1372,7 +1378,7 @@ $\mathrm{ROC\text{-}AUC}_{micro}\ne \mathrm{ROC\text{-}AUC}_{macro}$.
 
 Además de medir efectividad predictiva, el trabajo considera métricas operativas porque un modelo útil en un entorno tipo WAF no solo debe clasificar bien: también debe responder con bajo costo y con tiempos compatibles con la inspección de tráfico HTTP. Estas métricas se relacionan con la viabilidad práctica del flujo de procesamiento y se interpretan como mediciones de tiempo, capacidad de procesamiento, estabilidad y consumo de recursos. A diferencia de las métricas predictivas anteriores, no evalúan si la etiqueta predicha es correcta; evalúan cuánto cuesta aplicar el modelo y si la medición se completa de manera estable.
 
-\textbf{Alcance de la medición.} Se distinguen tres momentos del flujo experimental. Primero, la búsqueda de hiperparámetros, cuando existe. Segundo, la construcción o entrenamiento final del modelo. Tercero, la aplicación del flujo ya entrenado sobre peticiones medidas en una prueba operativa o \emph{benchmark}. Esta última etapa no incluye entrenamiento ni búsqueda de hiperparámetros: mide la capacidad de procesamiento de peticiones por unidad de tiempo. Cuando la medición desagrega tiempos, la latencia total corresponde a extracción de características más inferencia; la latencia de inferencia corresponde solo al paso del vector de características por el modelo. Los nombres técnicos de campos, como \texttt{wall\_time\_seconds}, se retienen únicamente para mantener trazabilidad con los artefactos de resultados; la interpretación de la métrica se da aquí en términos conceptuales.
+\textbf{Alcance de la medición.} Se distinguen tres momentos del flujo experimental. Primero, la búsqueda de hiperparámetros, cuando existe. Segundo, la construcción o entrenamiento final del modelo. Tercero, la aplicación del flujo ya entrenado sobre peticiones medidas en una prueba operativa o \emph{benchmark}. Esta última etapa no incluye entrenamiento ni búsqueda de hiperparámetros: mide la capacidad de procesamiento de peticiones por unidad de tiempo. Cuando la medición desagrega tiempos, la latencia total corresponde a extracción de características más inferencia; la latencia de inferencia corresponde solo al paso del vector de características por el modelo. En esta fundamentación se prioriza la definición conceptual de las métricas; la correspondencia con campos concretos de salida y archivos de resultados se documenta en la metodología y en los capítulos de resultados.
 
 \paragraph{Tiempo de optimización de parámetros.}
 La optimización de hiperparámetros consiste en probar configuraciones del modelo antes de elegir la variante final. Es importante medirla porque puede mejorar el rendimiento, pero también aumenta el costo experimental. Si una mejora pequeña requiere una búsqueda demasiado larga, esa configuración puede ser poco conveniente para un flujo reproducible o para reentrenamientos frecuentes. La Ecuación~\eqref{eq:topt} define este intervalo.
@@ -1399,7 +1405,7 @@ Mide el tiempo total empleado por la prueba operativa para procesar un conjunto 
 t_{apply}=t_{fin\_aplicacion}-t_{inicio\_aplicacion}.
 \end{equation}
 
-En los artefactos de medición este intervalo se registra como tiempo de reloj total, equivalente al campo \texttt{wall\_time\_seconds}. Este valor se interpreta junto con las latencias por petición, porque el tiempo total depende de cuántas peticiones fueron medidas y de si el flujo incluyó extracción de características, inferencia o ambas etapas.
+Este valor se interpreta junto con las latencias por petición, porque el tiempo total depende de cuántas peticiones fueron medidas y de si el flujo incluyó extracción de características, inferencia o ambas etapas. Por ese motivo, el tiempo de aplicación no debe leerse como una propiedad aislada del modelo, sino como una medición del flujo operativo definido para la evaluación.
 
 \paragraph{Capacidad de procesamiento (throughput).}
 Indica cuántas peticiones se procesan por segundo durante la prueba operativa, como define la Ecuación~\eqref{eq:throughput}:
@@ -1436,10 +1442,10 @@ La memoria se evalúa comparando el consumo de memoria residente antes y despué
 \label{eq:memory-delta}
 \Delta \mathrm{RSS}=\mathrm{RSS}_{despues}-\mathrm{RSS}_{antes}.
 \end{equation}
-El pico aproximado, $\mathrm{RSS}_{pico}$, resume la mayor memoria residente observada durante la prueba. El tamaño del modelo se calcula como el tamaño en bytes del artefacto serializado, según la Ecuación~\eqref{eq:model-size}:
+El pico aproximado, $\mathrm{RSS}_{pico}$, resume la mayor memoria residente observada durante la prueba. El tamaño del modelo se calcula como el espacio ocupado por la representación persistida del modelo, según la Ecuación~\eqref{eq:model-size}:
 \begin{equation}
 \label{eq:model-size}
-\text{Tamaño del modelo}=\text{bytes}(\text{artefacto serializado}).
+\text{Tamaño del modelo}=\text{bytes de la representación persistida del modelo}.
 \end{equation}
 Estas métricas permiten evaluar si una solución con buen rendimiento predictivo también es razonable desde el punto de vista operativo: un modelo puede clasificar bien, pero ser poco conveniente si requiere demasiada memoria, tarda demasiado en aplicarse o genera una prueba inestable.
 
@@ -1472,7 +1478,7 @@ Tiempo de aplicación & Tiempo total de la prueba operativa con el modelo ya ent
 Capacidad de procesamiento (throughput) & Peticiones completadas por segundo: peticiones completadas/$t_{apply}$. & Viabilidad operativa. \\
 Latencia P50/P95/P99 & Percentiles de tiempo por petición en el flujo medido. & Viabilidad operativa. \\
 Tasa de fallos & Proporción de solicitudes no completadas durante la prueba operativa, no errores de clasificación. & Estabilidad operativa. \\
-CPU/memoria/tamaño & Recursos consumidos durante la ejecución y tamaño en bytes del artefacto serializado. & Costo de despliegue. \\
+CPU/memoria/tamaño & Recursos consumidos durante la ejecución y tamaño en bytes de la representación persistida del modelo. & Costo de despliegue. \\
 \bottomrule
 \end{longtable}
 
@@ -1514,16 +1520,22 @@ La revisión muestra tres brechas que motivan este trabajo. Primero, no basta co
 Este capítulo describe las fuentes de datos utilizadas en los experimentos. La selección no busca reunir cualquier dataset de seguridad, sino conjuntos de datos que permitan trabajar con peticiones HTTP y comparar tres formulaciones del problema: detección binaria, clasificación multiclase y clasificación multietiqueta. Por esa razón, se distinguen tres criterios: pertinencia al dominio web, disponibilidad de etiquetas y posibilidad de transformar los campos de entrada a una representación común.
 
 \section{SR-BH 2020: tráfico real de honeypot con etiquetas CAPEC}
-SR-BH~2020 fue publicado en Harvard Dataverse y descrito en el artículo asociado como un dataset multietiqueta para clasificación de ataques web mediante CAPEC \cite{srbh_dataverse,srbh_paper}. Su interés principal para este trabajo es que no se limita a una etiqueta binaria de ataque, sino que permite representar una petición maliciosa con una o varias etiquetas CAPEC. Esa propiedad lo convierte en el dataset central para evaluar la formulación multietiqueta y para derivar, con una regla explícita, una versión multiclase basada en etiqueta primaria.
+SR-BH~2020 fue publicado en Harvard Dataverse y descrito en el artículo asociado como un dataset multietiqueta para clasificación de ataques web mediante CAPEC \cite{srbh_dataverse,srbh_paper}. Fue construido a partir de tráfico real recolectado durante doce días de julio de 2020 en un servidor WordPress instalado en una máquina virtual y expuesto a Internet. El entorno utilizó ModSecurity para Apache con Core Rule Set en modo \textit{Detection Only}; de ese modo, las peticiones quedaron registradas sin ser bloqueadas y luego los logs fueron revisados manual y semiautomáticamente para corregir o confirmar la asignación normal/ataque y la clasificación CAPEC correspondiente \cite{srbh_paper}.
 
-El dataset está alineado con un caso de uso tipo WAF porque el registro se realiza a nivel de petición HTTP y conserva campos directamente inspeccionables, como método, URI y cuerpo \cite{srbh_paper,owasp_waf}. Además, al provenir de un honeypot expuesto a Internet, aporta variabilidad de tráfico real y reduce el riesgo de evaluar únicamente sobre patrones sintéticos o demasiado controlados. Esta ventaja también introduce una limitación: el tráfico refleja el contexto específico del honeypot y no necesariamente todas las aplicaciones web de producción.
+El artículo del dataset reporta 907.814 peticiones HTTP: 525.195 normales y 382.619 anómalas. Cada registro original contiene 24 características y un conjunto de 13 etiquetas: una etiqueta asociada a la normalidad de la petición y 12 categorías CAPEC para ataques web \cite{srbh_paper}. Además, las peticiones maliciosas pueden activar más de una categoría CAPEC, por lo que SR-BH~2020 no se limita a una etiqueta binaria ni a una única clase de ataque. Esa propiedad lo convierte en el dataset central para evaluar la formulación multietiqueta y para derivar, con una regla explícita, una versión multiclase basada en etiqueta primaria.
+
+El dataset está alineado con un caso de uso tipo WAF porque el registro se realiza a nivel de petición HTTP y conserva información directamente inspeccionable por un mecanismo de protección web. En la representación adoptada por este trabajo, esos datos se normalizan hacia campos comunes como método, URI, cuerpo y, cuando está disponible, encabezados, a partir de los cuales se recalculan las 25 características usadas por los modelos. Esta decisión permite comparar SR-BH~2020 con CSIC~2010 y CSIC/TorpEda~2012 bajo una misma representación, aunque el dataset original de SR-BH haya sido publicado con una codificación y un conjunto de variables propios.
+
+La principal fortaleza de SR-BH~2020 es su mayor realismo frente a datasets sintéticos, porque proviene de un honeypot expuesto a Internet y conserva una anotación semántica por patrones CAPEC. Sin embargo, ese mismo origen impone límites de interpretación: el tráfico refleja el contexto de un servidor WordPress específico, una ventana temporal concreta y una configuración de captura basada en ModSecurity en modo de detección. Por tanto, los resultados obtenidos sobre este dataset no deben generalizarse automáticamente a todas las aplicaciones web, APIs, servicios REST/SOAP o despliegues productivos con patrones de tráfico diferentes. También debe considerarse el desbalance entre clases y etiquetas, ya que algunas categorías CAPEC tienen mucho menos soporte que otras y pueden afectar la estabilidad de métricas macro o por etiqueta.
 
 \subsection{SR-BH 2020 como referencia de tráfico real}
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Tráfico real}: reduce el riesgo de sobre-ajuste a patrones sintéticos y captura variabilidad de producción \cite{srbh_paper}.
-  \item \textbf{Etiquetas CAPEC multietiqueta}: permite ir más allá del binario y evaluar clasificación semántica por patrones \cite{srbh_paper,capec_about}.
-  \item \textbf{Pertinencia a WAF}: modela directamente campos inspeccionados por un WAF, principalmente método, URI y cuerpo \cite{owasp_waf,modsecurity_site}.
-  \item \textbf{Reproducibilidad}: al estar publicado con DOI persistente en Harvard Dataverse, facilita citación, trazabilidad y replicación de experimentos \cite{srbh_dataverse}.
+  \item \textbf{Tamaño y composición}: contiene 907.814 peticiones HTTP, con 525.195 normales y 382.619 anómalas, lo que ofrece volumen suficiente para evaluar escalabilidad y efectos de desbalance \cite{srbh_paper}.
+  \item \textbf{Campos y representación}: el dataset original incluye 24 características; en este trabajo se recalculan 25 variables interpretables desde método, URI, cuerpo y encabezados disponibles para mantener una representación común entre datasets.
+  \item \textbf{Etiquetas CAPEC multietiqueta}: incorpora 13 etiquetas, incluyendo normalidad y 12 categorías CAPEC, lo que permite ir más allá del binario y evaluar clasificación semántica por patrones \cite{srbh_paper,capec_about}.
+  \item \textbf{Tráfico real de honeypot}: reduce el riesgo de sobre-ajuste a patrones sintéticos y captura variabilidad observada en un servidor expuesto a Internet, aunque restringida al contexto de captura del honeypot \cite{srbh_paper}.
+  \item \textbf{Pertinencia a WAF}: modela información inspeccionable por un WAF, principalmente campos de la petición HTTP y señales asociadas al contenido enviado \cite{owasp_waf,modsecurity_site}.
+  \item \textbf{Reproducibilidad y límites}: al estar publicado con DOI persistente en Harvard Dataverse facilita citación y replicación; no obstante, su ventana temporal, su aplicación base y el soporte desigual de algunas etiquetas deben tratarse como amenazas a la validez externa \cite{srbh_dataverse,srbh_paper}.
 \end{itemize}
 
 \section{Datasets alternativos y unificación a un esquema común}
