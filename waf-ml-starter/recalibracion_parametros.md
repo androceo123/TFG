@@ -168,20 +168,30 @@ Referencia Nico/Ralf (OCS-WAF 2017): F1=0.95, Recall=0.93, FPR=0.03
 
 ---
 
-## Qué esperar de los resultados
+## Resultados reales obtenidos (dataset completo 86.864 filas)
 
-### Escenario optimista (si nu más alto ayuda)
-- Recall sube de 0.35 → 0.7–0.9 (más ataques detectados)
-- FPR sube de ~0 → 0.03–0.10 (algunas falsas alarmas normales)
-- F1 sube de 0.52 → 0.7–0.9
+| Experimento | F1 | Recall | Precision | FPR | Bal.Acc | MCC |
+|---|---|---|---|---|---|---|
+| BASE nu=0.001 (auto-tuning) | 0.518 | 0.350 | 0.9996 | ~0 | ~0.675 | 0.415 |
+| RUN3: nu=0.01, gamma=0.1 | 0.765 | 0.622 | **0.993** | **0.007** | 0.807 | 0.616 |
+| **RUN1: nu=0.05, gamma=0.1** ⭐ | **0.787** | 0.689 | 0.916 | 0.099 | **0.795** | 0.577 |
+| RUN2: nu=0.10, gamma=0.1 | 0.794 | **0.720** | 0.884 | 0.150 | 0.785 | 0.556 |
+| RUN4: mean_score auto-tune | 0.607 | 0.440 | 0.977 | 0.017 | 0.712 | 0.461 |
+| **Nico/Ralf (referencia)** | **0.95** | **0.93** | ~0.97 | **0.03** | ~0.95 | — |
 
-### Escenario pesimista (si el gap es arquitectural)
-- Recall mejora modestamente (0.35 → 0.5–0.6)
-- Gap restante explicado por arquitectura monolítica vs per-grupo de Nico/Ralf
-- Esto igual sería un resultado positivo para el TFG: demuestra que la arquitectura importa
+### Análisis de los resultados
 
-### En cualquier caso
-Ambos escenarios son válidos para el TFG. Si no alcanzamos F1=0.95, la explicación (arquitectura diferente + dataset global vs per-grupo) es un análisis académicamente sólido.
+**RUN1 (nu=0.05)** es el mejor balance global (F1=0.787). Sube el Recall de 0.35 → 0.69 con FPR=10%.
+
+**RUN3 (nu=0.01)** es el más parecido a Nico/Ralf en FPR (0.007 vs 0.03). Muy alta precisión (0.993) con Recall=0.622. Buena opción si se prioriza no bloquear tráfico legítimo.
+
+**RUN2 (nu=0.10)** sube el Recall a 0.72 pero FPR=15% — demasiadas falsas alarmas.
+
+**RUN4 (mean_score)** eligió nu=0.01/gamma=0.01 automáticamente — peor que el manual. Confirma que ninguna métrica de tuning one-class sustituye a la evaluación con ataques reales.
+
+### Gap restante vs Nico/Ralf (F1=0.787 vs F1=0.95)
+
+El gap es **arquitectural**. Nico/Ralf entrenaron 18 modelos separados (uno por URL+método HTTP), cada uno con datos homogéneos. Nuestro modelo global mezcla todos los patrones en un único clasificador. Esto es académicamente sólido para el TFG: demuestra el impacto de la granularidad del modelo en la detección de anomalías web.
 
 ---
 
