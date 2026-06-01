@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-cd "$SLURM_SUBMIT_DIR/waf-ml-starter" || exit 1
+cd "$SLURM_SUBMIT_DIR" || exit 1
 
 mkdir -p resultsOptimo/csic_sin_registro/oneclass
 
