@@ -12,18 +12,16 @@ set -euo pipefail
 
 cd "$SLURM_SUBMIT_DIR/waf-ml-starter" || exit 1
 
-source .venv/bin/activate
-
 mkdir -p resultsOptimo/csic_sin_registro/oneclass
 
 # Verificar GPU
-python -c "import sys; print('Python:', sys.executable); import cuml.accel; cuml.accel.install(); print('GPU cuml.accel OK')"
+srun python3.11 -c "import sys; print('Python:', sys.executable); import cuml.accel; cuml.accel.install(); print('GPU cuml.accel OK')"
 nvidia-smi || true
 
 # Generar dataset filtrado (sin aplicacion registro) si no existe
 if [ ! -f data/processed/csic_sin_registro/csic_features_sin_registro.parquet ]; then
     echo "[INFO] Generando dataset CSIC sin aplicacion registro..."
-    PYTHONPATH=src srun .venv/bin/python - <<'PY'
+    PYTHONPATH=src srun python3.11 - <<'PY'
 from pathlib import Path
 import pandas as pd
 
@@ -46,7 +44,7 @@ else
     echo "[INFO] Dataset filtrado ya existe, usando el existente."
 fi
 
-PYTHONPATH=src srun .venv/bin/python src/waf_ml/optimo/ocsvmOptimo.py \
+PYTHONPATH=src srun python3.11 src/waf_ml/optimo/ocsvmOptimo.py \
   --mode train \
   --backend sgd_ocsvm \
   --kernel-approx nystroem \
