@@ -35,3 +35,19 @@ waf-ml-starter/data/raw/*
 !waf-ml-starter/data/raw/.gitkeep
 
 results/
+
+# SLURM logs
+slurm-*.out
+*.err
+
+# Generated data/results
+waf-ml-starter/data/tmp/
+waf-ml-starter/resultsOptimo/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local IDE/env
+.idea/
+.venv/
