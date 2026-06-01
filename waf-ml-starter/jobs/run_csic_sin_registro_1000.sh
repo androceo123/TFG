@@ -12,11 +12,13 @@ set -euo pipefail
 
 cd "$SLURM_SUBMIT_DIR" || exit 1
 
+PYTHON=".venv/bin/python3.11"
+
 mkdir -p resultsOptimo/csic_sin_registro/oneclass_test1000 data/tmp
 
 # Paso 1: Generar dataset CSIC filtrado (sin aplicacion registro) y tomar muestra de 1000 filas.
 # Si label_binary existe, el muestreo es estratificado para preservar la proporcion normal/anomalo.
-PYTHONPATH=src srun python3.11 - <<'PY'
+PYTHONPATH=src srun $PYTHON - <<'PY'
 from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -55,11 +57,11 @@ if label_col in sample.columns:
 PY
 
 # Paso 2: Verificar GPU
-srun python3.11 -c "import sys; print('Python:', sys.executable); import cuml.accel; cuml.accel.install(); print('GPU cuml.accel OK')"
+srun $PYTHON -c "import sys; print('Python:', sys.executable); import cuml.accel; cuml.accel.install(); print('GPU cuml.accel OK')"
 nvidia-smi || true
 
 # Paso 3: Entrenar OCSVM sobre dataset filtrado (muestra de 1000)
-PYTHONPATH=src srun python3.11 src/waf_ml/optimo/ocsvmOptimo.py \
+PYTHONPATH=src srun $PYTHON src/waf_ml/optimo/ocsvmOptimo.py \
   --mode train \
   --backend sgd_ocsvm \
   --kernel-approx nystroem \
