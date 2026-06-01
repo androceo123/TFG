@@ -2,30 +2,32 @@ from __future__ import annotations
 
 """waf_ml.scripts.train_oneclass
 
-Scalable one-class detector aligned with the thesis methodology, but configured
-for exhaustive optimization when requested:
+Scalable one-class detector aligned with the thesis methodology, configured
+for fast, budgeted hyperparameter search:
 
 - Backend principal: StandardScaler + Nystroem + SGDOneClassSVM.
+- GPU acceleration: optional RAPIDS cuML accelerator via cuml.accel, installed before sklearn imports.
 - Fits the one-class model ONLY with normal traffic.
 - Default final training uses only the training-normal partition, preserving a
   final holdout for evaluation.
-- Hyperparameter selection can use K-fold CV over normal traffic and attack
-  validation folds when labels are available.
+- Hyperparameter selection is performed inside the normal-training block only,
+  preserving all attacks/anomalies for final evaluation.
 - Reports binary effectiveness metrics and optional real-time feasibility metrics.
-- Computes direct per-feature permutation importance over the evaluation set.
+- Computes SHAP feature importance by default over the final evaluation set.
 
 Example:
   python -m waf_ml.scripts.train_ocsvm_updated \
       --backend sgd_ocsvm --kernel-approx nystroem \
       --mode train --data dataset.parquet --label-col label_binary \
-      --test-size 0.2 --tune grid --cv 5 --final-train-on train_normals \
-      --out model.joblib --metrics-out metrics.json
+      --test-size 0.2 --tune fast --cv 3 --final-train-on train_normals \
+      --require-gpu --out model.joblib --metrics-out metrics.json
 """
 
 import argparse
 import json
 import os
 import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -33,6 +35,33 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import joblib
 import numpy as np
 import pandas as pd
+
+# -----------------------------------------------------------------------------
+# GPU acceleration with RAPIDS cuML
+# -----------------------------------------------------------------------------
+# IMPORTANT: cuml.accel.install() must run before importing sklearn modules.
+# If RAPIDS is installed in the active venv, this monkey-patches compatible
+# scikit-learn estimators/steps to use GPU acceleration automatically.
+# If it is not installed, the script keeps working on CPU unless --require-gpu
+# is passed.
+GPU_ACCEL_ENABLED = False
+GPU_ACCEL_ERROR: Optional[str] = None
+try:  # pragma: no cover - depends on CUDA/RAPIDS environment
+    import cuml.accel  # type: ignore
+
+    cuml.accel.install()
+    GPU_ACCEL_ENABLED = True
+except Exception as _gpu_exc:  # pragma: no cover
+    GPU_ACCEL_ERROR = repr(_gpu_exc)
+
+
+def _gpu_accel_summary() -> Dict[str, object]:
+    return {
+        "enabled": bool(GPU_ACCEL_ENABLED),
+        "accelerator": "cuml.accel",
+        "error": GPU_ACCEL_ERROR,
+    }
+
 
 try:
     import psutil  # type: ignore
@@ -65,7 +94,14 @@ from sklearn.preprocessing import StandardScaler
 try:  # package execution
     from waf_ml.features.http_features import extract_http_features
 except Exception:  # pragma: no cover - local fallback for standalone testing
-    from http_features import extract_http_features
+    try:
+        from http_features import extract_http_features  # type: ignore
+    except Exception:
+        def extract_http_features(*args, **kwargs):  # type: ignore
+            raise RuntimeError(
+                "Feature extraction module not found. Run inside the waf_ml project, "
+                "or use --benchmark-mode inference when the data already has feature columns."
+            )
 
 
 DEFAULT_FEATURES = [
@@ -231,11 +267,22 @@ def _binary_metrics(y_true: np.ndarray, y_pred: np.ndarray, y_score: Optional[np
         "f1": _safe_float(f1_score(y_true, y_pred, zero_division=0)),
         "mcc": _safe_float(matthews_corrcoef(y_true, y_pred)),
         "specificity": _safe_float(tn / (tn + fp)) if (tn + fp) > 0 else None,
+        "tnr": _safe_float(tn / (tn + fp)) if (tn + fp) > 0 else None,
         "fpr": _safe_float(fp / (fp + tn)) if (fp + tn) > 0 else None,
         "fnr": _safe_float(fn / (fn + tp)) if (fn + tp) > 0 else None,
         "tpr": _safe_float(tp / (tp + fn)) if (tp + fn) > 0 else None,
+        "predicted_positive_rate": _safe_float(np.mean(y_pred == 1)) if len(y_pred) else None,
+        "true_positive_rate_prevalence": _safe_float(np.mean(y_true == 1)) if len(y_true) else None,
         "classification_report": classification_report(y_true, y_pred, digits=6, zero_division=0, output_dict=True),
     }
+
+    # Metrics explicitly mentioned in the thesis dictionary for supervised/binary reductions.
+    # For binary one-class evaluation, these variants are redundant in some cases, but keeping
+    # them in the JSON makes the result tables consistent with the .tex terminology.
+    for avg in ["micro", "macro", "weighted"]:
+        out[f"precision_{avg}"] = _safe_float(precision_score(y_true, y_pred, average=avg, zero_division=0))
+        out[f"recall_{avg}"] = _safe_float(recall_score(y_true, y_pred, average=avg, zero_division=0))
+        out[f"f1_{avg}"] = _safe_float(f1_score(y_true, y_pred, average=avg, zero_division=0))
 
     if y_score is not None:
         y_score = np.asarray(y_score, dtype=float)
@@ -663,7 +710,7 @@ def _print_benchmark(bench: Dict[str, object], *, title: str) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Exhaustive CV tuning + direct feature importance
+# Fast/budgeted tuning + direct feature importance
 # -----------------------------------------------------------------------------
 
 def _build_oneclass_pipeline_v2(
@@ -812,10 +859,10 @@ def _iter_candidates_v2(
         for tol in tol_grid
     ]
     tune = (tune or "none").strip().lower()
-    if tune == "random":
+    if tune in {"fast", "random", "halving"}:
         rng = np.random.default_rng(int(seed))
         rng.shuffle(combos)
-        combos = combos[: max(1, int(n_iter))]
+        combos = combos[: max(1, min(int(n_iter), len(combos)))]
     elif tune == "grid":
         pass
     elif tune == "none":
@@ -823,6 +870,19 @@ def _iter_candidates_v2(
     else:
         raise ValueError(f"Unsupported tune mode: {tune}")
     return combos
+
+
+def _make_fast_holdout_split(df_norm: pd.DataFrame, validation_size: float, seed: int) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Single normal-only internal split: fastest valid option for one-class tuning."""
+    n_norm = len(df_norm)
+    if n_norm < 2:
+        raise ValueError("Fast tuning requires at least 2 normal rows.")
+    idx = np.arange(n_norm)
+    test_size = float(validation_size)
+    if not (0.0 < test_size < 1.0):
+        test_size = 0.2
+    train_idx, val_idx = train_test_split(idx, test_size=test_size, random_state=int(seed), shuffle=True)
+    return [(np.asarray(train_idx, dtype=int), np.asarray(val_idx, dtype=int), np.asarray([], dtype=int))]
 
 
 def _make_cv_splits(df_norm: pd.DataFrame, df_att: pd.DataFrame, cv: int, seed: int) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
@@ -935,6 +995,88 @@ def _evaluate_candidate_cv(
         return row
 
 
+
+def _evaluate_candidates_successive_halving(
+    candidates: List[Dict[str, object]],
+    df_norm_tune: pd.DataFrame,
+    features: List[str],
+    label_col: str,
+    metric: str,
+    backend: str,
+    kernel_approx: str,
+    seed: int,
+    *,
+    validation_size: float,
+    rounds: int,
+    factor: int,
+    tune_max_train: int,
+    tune_max_eval: int,
+    n_jobs: int,
+) -> List[Dict[str, object]]:
+    """Small custom successive-halving loop for the scalable one-class setting.
+
+    It uses only normal traffic for selection, starts with a reduced sample, keeps
+    the best candidates, and increases the sampled normal block each round.
+    """
+    if not candidates:
+        return []
+    factor = max(2, int(factor))
+    rounds = max(1, int(rounds))
+    active = list(candidates)
+    all_rows: List[Dict[str, object]] = []
+    n_total = len(df_norm_tune)
+    if n_total < 2:
+        raise ValueError("Halving tuning requires at least 2 normal rows.")
+
+    # A conservative first resource: fast enough, but not too tiny.
+    base_cap = int(tune_max_train) if int(tune_max_train) > 0 else min(n_total, 5000)
+    base_cap = max(2, min(base_cap, n_total))
+
+    for round_id in range(1, rounds + 1):
+        cap = min(n_total, max(2, int(base_cap * (factor ** (round_id - 1)))))
+        df_round = df_norm_tune.sample(cap, random_state=int(seed) + 7919 * round_id).reset_index(drop=True) if cap < n_total else df_norm_tune.reset_index(drop=True)
+        splits = _make_fast_holdout_split(df_round, validation_size=validation_size, seed=int(seed) + round_id)
+        eval_cap = int(tune_max_eval) if int(tune_max_eval) > 0 else 0
+        if eval_cap > 0:
+            eval_cap = int(eval_cap * (factor ** (round_id - 1)))
+
+        def _eval(cand: Dict[str, object]) -> Dict[str, object]:
+            row = _evaluate_candidate_cv(
+                cand,
+                df_round,
+                df_round.iloc[0:0].copy(),
+                splits,
+                features,
+                label_col,
+                metric,
+                backend,
+                kernel_approx,
+                seed + round_id,
+                eval_cap,
+            )
+            row["halving_round"] = int(round_id)
+            row["halving_train_rows"] = int(len(df_round))
+            row["is_final_round"] = bool(round_id == rounds or len(active) <= 1)
+            return row
+
+        n_jobs_eff = int(n_jobs) if int(n_jobs) != 0 else 1
+        if n_jobs_eff == 1:
+            rows = [_eval(c) for c in active]
+        else:
+            rows = joblib.Parallel(n_jobs=n_jobs_eff, prefer="threads")(
+                joblib.delayed(_eval)(c) for c in active
+            )
+        all_rows.extend(rows)
+        ok_rows = [r for r in rows if _safe_float(r.get("score")) is not None]
+        ok_rows = sorted(ok_rows, key=lambda r: (float(r.get("score", -np.inf)), -float(r.get("score_std") or 0.0)), reverse=True)
+        if not ok_rows or len(active) <= 1:
+            break
+        keep = max(1, int(np.ceil(len(ok_rows) / factor)))
+        active = [{k: r[k] for k in ["nu", "gamma", "n_components", "max_iter", "tol"]} for r in ok_rows[:keep]]
+        print(f"[TUNE] halving round {round_id}/{rounds}: evaluated={len(rows)} keep={len(active)} train_rows={len(df_round)}")
+    return all_rows
+
+
 def _derive_fi_path(model_out: str, tag: str) -> str:
     return f"{model_out}.feature_importance.{tag}.csv"
 
@@ -1022,6 +1164,105 @@ def _permutation_feature_importance_oneclass(
     return df_imp, summary
 
 
+
+def _shap_feature_importance_oneclass(
+    model: Pipeline,
+    X: pd.DataFrame,
+    features: List[str],
+    *,
+    seed: int,
+    background_rows: int,
+    explain_rows: int,
+    max_evals: int,
+    batch_size: int,
+) -> Tuple[pd.DataFrame, Dict[str, object]]:
+    """Model-agnostic SHAP importance over original HTTP features.
+
+    For this Pipeline (StandardScaler -> Nystroem -> SGDOneClassSVM), the most
+    faithful generic option is SHAP permutation masking over the pipeline's
+    anomaly score. The default row caps keep the computation practical.
+    """
+    try:
+        import shap  # type: ignore
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError(
+            "SHAP feature importance requires the 'shap' package. Install it with: pip install shap"
+        ) from e
+
+    # Compatibility for older SHAP versions on newer NumPy releases.
+    if not hasattr(np, "bool"):
+        np.bool = bool  # type: ignore[attr-defined]
+    if not hasattr(np, "int"):
+        np.int = int  # type: ignore[attr-defined]
+
+    X_all = X[features].fillna(0).astype(float).reset_index(drop=True)
+    if len(X_all) == 0:
+        raise ValueError("Cannot compute SHAP on an empty evaluation matrix.")
+
+    explain_n = int(explain_rows) if int(explain_rows) > 0 else len(X_all)
+    explain_n = min(explain_n, len(X_all))
+    X_explain = X_all.sample(explain_n, random_state=int(seed)).reset_index(drop=True) if explain_n < len(X_all) else X_all.copy()
+
+    bg_n = int(background_rows) if int(background_rows) > 0 else min(100, len(X_all))
+    bg_n = max(1, min(bg_n, len(X_all)))
+    X_background = X_all.sample(bg_n, random_state=int(seed) + 101).reset_index(drop=True)
+
+    def anomaly_score(data) -> np.ndarray:
+        arr = np.asarray(data, dtype=float)
+        df_score = pd.DataFrame(arr, columns=features)
+        try:
+            return -np.asarray(model.decision_function(df_score), dtype=float)
+        except Exception:
+            pred = np.asarray(model.predict(df_score), dtype=float)
+            return (pred == -1).astype(float)
+
+    evals = int(max_evals) if int(max_evals) > 0 else max(2 * len(features) + 1, 50)
+    masker = shap.maskers.Independent(X_background)
+    explainer = shap.Explainer(anomaly_score, masker, algorithm="permutation")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            shap_values = explainer(X_explain, max_evals=evals, batch_size=max(1, int(batch_size)), silent=True)
+        except TypeError:
+            shap_values = explainer(X_explain, max_evals=evals, batch_size=max(1, int(batch_size)))
+
+    values = np.asarray(shap_values.values, dtype=float)
+    if values.ndim == 3:
+        values = values[:, :, 0]
+    if values.ndim != 2 or values.shape[1] != len(features):
+        raise RuntimeError(f"Unexpected SHAP values shape: {values.shape}; expected (n_rows, {len(features)}).")
+
+    base_values = getattr(shap_values, "base_values", None)
+    base_mean = _safe_float(np.mean(base_values)) if base_values is not None else None
+    rows = []
+    mean_abs = np.mean(np.abs(values), axis=0)
+    mean_signed = np.mean(values, axis=0)
+    std_abs = np.std(np.abs(values), axis=0, ddof=0)
+    for feat, ma, ms, sa in zip(features, mean_abs, mean_signed, std_abs):
+        rows.append({
+            "feature": feat,
+            "shap_mean_abs": float(ma),
+            "shap_mean_signed": float(ms),
+            "shap_std_abs": float(sa),
+            "n_rows_explained": int(len(X_explain)),
+            "background_rows": int(len(X_background)),
+            "max_evals": int(evals),
+            "score_orientation": "higher = more anomalous",
+        })
+    df_imp = pd.DataFrame(rows).sort_values("shap_mean_abs", ascending=False).reset_index(drop=True)
+    df_imp["rank"] = np.arange(1, len(df_imp) + 1)
+    summary = {
+        "kind": "shap_permutation",
+        "score_orientation": "higher = more anomalous",
+        "n_rows_explained": int(len(X_explain)),
+        "background_rows": int(len(X_background)),
+        "max_evals": int(evals),
+        "batch_size": int(batch_size),
+        "base_value_mean": base_mean,
+    }
+    return df_imp, summary
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Train/Test optimized scalable one-class detector on WAF features.")
     ap.add_argument("--backend", default="sgd_ocsvm", choices=["sgd_ocsvm"])
@@ -1054,9 +1295,9 @@ def main() -> None:
     ap.add_argument("--pred-out", default=None, help="Optional: save predictions for evaluation/test data")
     ap.add_argument("--eval-data", nargs="*", default=None, help="(train) Extra CSV/Parquet file(s) to include in final evaluation")
 
-    # Exhaustive tuning options
-    ap.add_argument("--tune", default="grid", choices=["none", "grid", "random"], help="Hyperparameter search. Default grid is intentionally exhaustive.")
-    ap.add_argument("--cv", type=int, default=5, help="K-fold CV over normal traffic during tuning.")
+    # Fast/budgeted tuning options
+    ap.add_argument("--tune", default="fast", choices=["none", "fast", "random", "halving", "grid"], help="Hyperparameter search. Default 'fast' uses a single normal-only holdout and a small random budget.")
+    ap.add_argument("--cv", type=int, default=3, help="K-fold CV over normal traffic during random/grid tuning.")
     ap.add_argument(
         "--tune-metric",
         default="auto",
@@ -1067,28 +1308,34 @@ def main() -> None:
         ],
         help="Metric optimized during CV. auto uses f1 when attacks are available; otherwise normal_acceptance.",
     )
-    ap.add_argument("--tune-nu-grid", default="0.001,0.003,0.005,0.01,0.02,0.03,0.05,0.08,0.1,0.15,0.2")
-    ap.add_argument("--tune-gamma-grid", default="0.001,0.003,0.01,0.03,0.05,0.1,0.2,0.3,0.5,1.0")
-    ap.add_argument("--tune-n-components-grid", default="128,256,512,1024,2048")
-    ap.add_argument("--tune-max-iter-grid", default="1000,2000,3000,5000,8000")
+    ap.add_argument("--tune-nu-grid", default="0.001,0.003,0.005,0.01,0.02,0.05,0.1")
+    ap.add_argument("--tune-gamma-grid", default="0.001,0.003,0.01,0.03,0.1,0.3")
+    ap.add_argument("--tune-n-components-grid", default="128,256,512")
+    ap.add_argument("--tune-max-iter-grid", default="1000,2000,5000")
     ap.add_argument("--tune-tol-grid", default="0.001,0.0005,0.0001")
-    ap.add_argument("--tune-n-iter", "--tune-budget", dest="tune_n_iter", type=int, default=128, help="Only used with --tune random")
+    ap.add_argument("--tune-n-iter", "--tune-budget", dest="tune_n_iter", type=int, default=32, help="Candidate budget for --tune fast/random/halving")
     ap.add_argument("--tune-n-jobs", type=int, default=-1, help="Parallel candidate evaluation. Use 1 if RAM is tight.")
-    ap.add_argument("--tune-max-train", type=int, default=0, help="Optional cap for tuning normal rows (0 = no cap)")
-    ap.add_argument("--tune-max-eval", type=int, default=0, help="Optional cap for validation rows per CV fold (0 = no cap)")
+    ap.add_argument("--tune-max-train", type=int, default=30000, help="Cap for tuning normal rows (0 = no cap). Default keeps tuning fast.")
+    ap.add_argument("--tune-max-eval", type=int, default=10000, help="Cap for validation rows per split/fold (0 = no cap). Default keeps tuning fast.")
+    ap.add_argument("--tune-fast-validation-size", type=float, default=0.2, help="Internal normal-only validation fraction for --tune fast/halving.")
+    ap.add_argument("--tune-halving-rounds", type=int, default=3, help="Successive-halving rounds for --tune halving.")
+    ap.add_argument("--tune-halving-factor", type=int, default=3, help="Candidate reduction factor for --tune halving.")
     ap.add_argument("--tune-results-out", default=None, help="Optional CSV to save per-candidate CV scores")
 
     # Effectiveness outputs
     ap.add_argument("--metrics-out", default=None, help="Optional JSON path for binary effectiveness metrics")
 
     # Direct feature importance: no automatic 'without suspicious tokens' variant.
-    ap.add_argument("--fi-kind", default="permutation", choices=["permutation", "none"], help="Direct per-feature importance on the final evaluation set.")
-    ap.add_argument("--fi-out", default=None, help="Optional CSV path for feature importance. Default: <out>.feature_importance.permutation.csv")
+    ap.add_argument("--fi-kind", default="shap", choices=["shap", "permutation", "none"], help="Per-feature importance on the final evaluation set. Default: SHAP.")
+    ap.add_argument("--fi-out", default=None, help="Optional CSV path for feature importance. Default: <out>.feature_importance.<kind>.csv")
     ap.add_argument("--fi-topk", type=int, default=25)
     ap.add_argument("--fi-n-repeats", type=int, default=10)
     ap.add_argument("--fi-n-jobs", type=int, default=-1)
     ap.add_argument("--fi-scoring", default=None, choices=["auto", "f1", "balanced_accuracy", "mcc", "roc_auc", "pr_auc", "recall", "tpr", "precision", "accuracy", "normal_acceptance", "false_reject_rate", "mean_score"])
-    ap.add_argument("--fi-max-rows", type=int, default=0, help="Optional cap only for permutation FI rows (0 = full eval set).")
+    ap.add_argument("--fi-max-rows", type=int, default=500, help="Optional cap for FI rows. Default keeps SHAP practical; use 0 for full eval set.")
+    ap.add_argument("--shap-background-rows", type=int, default=100, help="Background rows for SHAP masker.")
+    ap.add_argument("--shap-max-evals", type=int, default=0, help="SHAP permutation max_evals; 0 = 2 * n_features + 1.")
+    ap.add_argument("--shap-batch-size", type=int, default=64, help="SHAP scoring batch size.")
 
     # Real-time / efficiency metrics
     ap.add_argument("--benchmark-mode", default="auto", choices=["auto", "full", "inference", "none"])
@@ -1099,8 +1346,21 @@ def main() -> None:
     ap.add_argument("--benchmark-load-rows", type=int, default=300)
     ap.add_argument("--require-resource-metrics", action="store_true", help="Fail the run if CPU/RAM benchmark metrics cannot be measured.")
     ap.add_argument("--benchmark-out", default=None, help="Optional JSON path for latency/throughput/CPU/RAM metrics")
+    ap.add_argument("--require-gpu", action="store_true", help="Fail the run if RAPIDS cuml.accel cannot be enabled.")
 
     args = ap.parse_args()
+
+    if GPU_ACCEL_ENABLED:
+        print("[GPU] RAPIDS cuml.accel enabled. Compatible sklearn steps will use GPU acceleration when supported.")
+    else:
+        print(f"[GPU] RAPIDS cuml.accel not enabled; falling back to CPU sklearn. Reason: {GPU_ACCEL_ERROR}")
+
+    if args.require_gpu and not GPU_ACCEL_ENABLED:
+        raise RuntimeError(
+            "--require-gpu was passed, but RAPIDS cuml.accel could not be enabled. "
+            "Install RAPIDS in the active venv and verify CUDA/GPU availability. "
+            f"Original error: {GPU_ACCEL_ERROR}"
+        )
 
     if args.mode == "train" and not args.out:
         ap.error("--out is required in --mode train")
@@ -1133,24 +1393,15 @@ def main() -> None:
         else:
             df_norm_train, df_norm_hold = df_norm, df_norm.iloc[0:0].copy()
 
-        if args.test_size and 0.0 < args.test_size < 1.0 and len(df_att) >= 2:
-            df_att_tune, df_att_hold = train_test_split(
-                df_att,
-                test_size=float(args.test_size),
-                random_state=int(args.seed),
-                shuffle=True,
-            )
-            df_att_tune = df_att_tune.reset_index(drop=True)
-            df_att_hold = df_att_hold.reset_index(drop=True)
-        else:
-            # If there are too few attacks to split safely, keep them only for final evaluation.
-            df_att_tune = df_att.iloc[0:0].copy()
-            df_att_hold = df_att.copy()
+        # Methodology for one-class: attacks/anomalies are never used for tuning.
+        # The final evaluation uses the 20% holdout of normals plus ALL available attacks.
+        df_att_tune = df_att.iloc[0:0].copy()
+        df_att_hold = df_att.copy()
 
         print(
             "[INFO] one-class split summary: "
             f"total_normals={len(df_norm)} train_normals={len(df_norm_train)} holdout_normals={len(df_norm_hold)} "
-            f"total_attacks={len(df_att)} tune_attacks={len(df_att_tune)} holdout_attacks={len(df_att_hold)}"
+            f"total_attacks={len(df_att)} attacks_used_for_tuning=0 attacks_reserved_for_final_eval={len(df_att_hold)}"
         )
 
         # Build final evaluation set first. This set is not used for fitting.
@@ -1182,7 +1433,7 @@ def main() -> None:
         tune_summary: Dict[str, object] = {
             "enabled": tune_mode != "none",
             "mode": tune_mode,
-            "protocol": "kfold_cv",
+            "protocol": "normal_only_fast_holdout" if tune_mode == "fast" else ("successive_halving_normal_only" if tune_mode == "halving" else "normal_only_kfold_cv"),
             "requested_metric": str(args.tune_metric),
             "cv": int(args.cv),
             "tuning_time_seconds": None,
@@ -1215,15 +1466,38 @@ def main() -> None:
                 args.tune_n_iter,
                 args.seed,
             )
-            splits = _make_cv_splits(df_norm_tune, df_att_tune, args.cv, args.seed)
+            if tune_mode == "fast":
+                splits = _make_fast_holdout_split(df_norm_tune, args.tune_fast_validation_size, args.seed)
+            elif tune_mode == "halving":
+                splits = []
+            else:
+                splits = _make_cv_splits(df_norm_tune, df_att_tune, args.cv, args.seed)
             print(
-                f"[TUNE] protocol=kfold_cv mode={tune_mode} folds={len(splits)} candidates={len(candidates)} "
-                f"normals_for_tuning={len(df_norm_tune)} attacks_for_validation={len(df_att_tune)} metric={args.tune_metric}"
+                f"[TUNE] protocol={tune_summary['protocol']} mode={tune_mode} "
+                f"folds={len(splits) if splits else 'progressive'} candidates={len(candidates)} "
+                f"normals_for_tuning={len(df_norm_tune)} attacks_for_validation=0 metric={args.tune_metric}"
             )
 
             tune_t0 = time.perf_counter()
             n_jobs_eff = int(args.tune_n_jobs) if int(args.tune_n_jobs) != 0 else 1
-            if n_jobs_eff == 1:
+            if tune_mode == "halving":
+                rows = _evaluate_candidates_successive_halving(
+                    candidates,
+                    df_norm_tune,
+                    features,
+                    label_col,
+                    args.tune_metric,
+                    args.backend,
+                    args.kernel_approx,
+                    args.seed,
+                    validation_size=args.tune_fast_validation_size,
+                    rounds=args.tune_halving_rounds,
+                    factor=args.tune_halving_factor,
+                    tune_max_train=args.tune_max_train,
+                    tune_max_eval=args.tune_max_eval,
+                    n_jobs=args.tune_n_jobs,
+                )
+            elif n_jobs_eff == 1:
                 rows = []
                 for i, cand in enumerate(candidates, start=1):
                     row = _evaluate_candidate_cv(
@@ -1270,7 +1544,12 @@ def main() -> None:
             ok_df = result_df.replace([np.inf, -np.inf], np.nan).dropna(subset=["score"])
             if ok_df.empty:
                 raise RuntimeError("All tuning candidates failed. Check tune_results_out for errors.")
-            best_row = ok_df.sort_values(["score", "score_std"], ascending=[False, True]).iloc[0].to_dict()
+            selection_df = ok_df
+            if tune_mode == "halving" and "is_final_round" in ok_df.columns:
+                final_df = ok_df[ok_df["is_final_round"] == True]
+                if not final_df.empty:
+                    selection_df = final_df
+            best_row = selection_df.sort_values(["score", "score_std"], ascending=[False, True]).iloc[0].to_dict()
             best_params = {
                 "nu": float(best_row["nu"]),
                 "gamma": float(best_row["gamma"]),
@@ -1287,7 +1566,7 @@ def main() -> None:
                 "effective_metric": str(best_row.get("effective_metric")),
                 "best_params": best_params,
                 "normal_rows_for_tuning": int(len(df_norm_tune)),
-                "attack_rows_for_validation": int(len(df_att_tune)),
+                "attack_rows_for_validation": 0,
                 "tuning_time_seconds": float(tuning_time_seconds),
                 "n_candidates_evaluated": int(len(rows)),
                 "failed_candidates": int((result_df.get("error", "") != "").sum()) if "error" in result_df.columns else 0,
@@ -1330,6 +1609,7 @@ def main() -> None:
             "features": features,
             "params": best_params,
             "tuning": tune_summary,
+            "gpu_acceleration": _gpu_accel_summary(),
         }
         joblib.dump(payload_to_save, args.out)
         print(f"Saved model: {args.out}")
@@ -1338,6 +1618,7 @@ def main() -> None:
             "mode": "train_eval",
             "backend": args.backend,
             "kernel_approx": args.kernel_approx,
+            "gpu_acceleration": _gpu_accel_summary(),
             "label_col": label_col,
             "test_size": float(args.test_size),
             "seed": int(args.seed),
@@ -1355,8 +1636,9 @@ def main() -> None:
                 "total_attacks": int(len(df_att)),
                 "train_normals": int(len(df_norm_train)),
                 "holdout_normals": int(len(df_norm_hold)),
-                "tune_attacks": int(len(df_att_tune)),
+                "tune_attacks": 0,
                 "holdout_attacks": int(len(df_att_hold)),
+                "oneclass_attack_policy": "all_attacks_reserved_for_final_evaluation",
             },
         }
 
@@ -1389,28 +1671,47 @@ def main() -> None:
                 _save_table(df_pred, args.pred_out)
                 print(f"Saved predictions: {args.pred_out}")
 
-            if (args.fi_kind or "none").strip().lower() == "permutation" and label_col in df_eval.columns:
+            fi_kind = (args.fi_kind or "none").strip().lower()
+            if fi_kind != "none" and label_col in df_eval.columns:
                 df_fi = df_eval
                 if args.fi_max_rows and args.fi_max_rows > 0 and len(df_fi) > args.fi_max_rows:
                     df_fi = df_fi.sample(int(args.fi_max_rows), random_state=int(args.seed)).reset_index(drop=True)
                 X_fi = df_fi[features].fillna(0)
-                y_fi = df_fi[label_col].astype(int).to_numpy()
-                fi_metric = args.fi_scoring or args.tune_metric or "auto"
-                fi_df, fi_summary = _permutation_feature_importance_oneclass(
-                    model,
-                    X_fi,
-                    y_fi,
-                    features,
-                    metric=fi_metric,
-                    n_repeats=args.fi_n_repeats,
-                    seed=args.seed,
-                    n_jobs=args.fi_n_jobs,
-                )
-                fi_out = args.fi_out or _derive_fi_path(args.out, "permutation")
+                if fi_kind == "shap":
+                    fi_df, fi_summary = _shap_feature_importance_oneclass(
+                        model,
+                        X_fi,
+                        features,
+                        seed=args.seed,
+                        background_rows=args.shap_background_rows,
+                        explain_rows=args.fi_max_rows,
+                        max_evals=args.shap_max_evals,
+                        batch_size=args.shap_batch_size,
+                    )
+                    fi_tag = "shap"
+                    fi_rank_col = "shap_mean_abs"
+                elif fi_kind == "permutation":
+                    y_fi = df_fi[label_col].astype(int).to_numpy()
+                    fi_metric = args.fi_scoring or args.tune_metric or "auto"
+                    fi_df, fi_summary = _permutation_feature_importance_oneclass(
+                        model,
+                        X_fi,
+                        y_fi,
+                        features,
+                        metric=fi_metric,
+                        n_repeats=args.fi_n_repeats,
+                        seed=args.seed,
+                        n_jobs=args.fi_n_jobs,
+                    )
+                    fi_tag = "permutation"
+                    fi_rank_col = "importance_mean_delta"
+                else:
+                    raise ValueError(f"Unsupported --fi-kind: {fi_kind}")
+                fi_out = args.fi_out or _derive_fi_path(args.out, fi_tag)
                 os.makedirs(os.path.dirname(fi_out) or ".", exist_ok=True)
                 fi_df.to_csv(fi_out, index=False)
                 print(f"Saved feature importance: {fi_out}")
-                _print_top_importance(fi_df, "importance_mean_delta", args.fi_topk)
+                _print_top_importance(fi_df, fi_rank_col, args.fi_topk)
                 fi_summary["path"] = fi_out
                 metrics_payload["feature_importance"] = fi_summary
             else:
@@ -1432,6 +1733,7 @@ def main() -> None:
                 train_time_seconds=train_time_seconds,
             )
             _print_benchmark(bench_payload, title="Benchmark")
+            metrics_payload["benchmark"] = bench_payload
 
         _save_json(metrics_payload, args.metrics_out)
         _save_json(bench_payload, args.benchmark_out)
@@ -1456,32 +1758,52 @@ def main() -> None:
             "mode": "test",
             "backend": loaded.get("backend") if isinstance(loaded, dict) else None,
             "kernel_approx": loaded.get("kernel_approx") if isinstance(loaded, dict) else None,
+            "gpu_acceleration": _gpu_accel_summary(),
             "features_used": use_features,
             "evaluation": binary,
         }
 
-        if (args.fi_kind or "none").strip().lower() == "permutation":
+        fi_kind = (args.fi_kind or "none").strip().lower()
+        if fi_kind != "none":
             df_fi = df
             if args.fi_max_rows and args.fi_max_rows > 0 and len(df_fi) > args.fi_max_rows:
                 df_fi = df_fi.sample(int(args.fi_max_rows), random_state=int(args.seed)).reset_index(drop=True)
             X_fi = df_fi[use_features].fillna(0)
-            y_fi = df_fi[args.label_col].astype(int).to_numpy()
-            fi_metric = args.fi_scoring or args.tune_metric or "auto"
-            fi_df, fi_summary = _permutation_feature_importance_oneclass(
-                model,
-                X_fi,
-                y_fi,
-                use_features,
-                metric=fi_metric,
-                n_repeats=args.fi_n_repeats,
-                seed=args.seed,
-                n_jobs=args.fi_n_jobs,
-            )
-            fi_out = args.fi_out or _derive_fi_path(args.model, "permutation.test")
+            if fi_kind == "shap":
+                fi_df, fi_summary = _shap_feature_importance_oneclass(
+                    model,
+                    X_fi,
+                    use_features,
+                    seed=args.seed,
+                    background_rows=args.shap_background_rows,
+                    explain_rows=args.fi_max_rows,
+                    max_evals=args.shap_max_evals,
+                    batch_size=args.shap_batch_size,
+                )
+                fi_tag = "shap.test"
+                fi_rank_col = "shap_mean_abs"
+            elif fi_kind == "permutation":
+                y_fi = df_fi[args.label_col].astype(int).to_numpy()
+                fi_metric = args.fi_scoring or args.tune_metric or "auto"
+                fi_df, fi_summary = _permutation_feature_importance_oneclass(
+                    model,
+                    X_fi,
+                    y_fi,
+                    use_features,
+                    metric=fi_metric,
+                    n_repeats=args.fi_n_repeats,
+                    seed=args.seed,
+                    n_jobs=args.fi_n_jobs,
+                )
+                fi_tag = "permutation.test"
+                fi_rank_col = "importance_mean_delta"
+            else:
+                raise ValueError(f"Unsupported --fi-kind: {fi_kind}")
+            fi_out = args.fi_out or _derive_fi_path(args.model, fi_tag)
             os.makedirs(os.path.dirname(fi_out) or ".", exist_ok=True)
             fi_df.to_csv(fi_out, index=False)
             print(f"Saved feature importance: {fi_out}")
-            _print_top_importance(fi_df, "importance_mean_delta", args.fi_topk)
+            _print_top_importance(fi_df, fi_rank_col, args.fi_topk)
             fi_summary["path"] = fi_out
             metrics_to_save["feature_importance"] = fi_summary
     else:
@@ -1491,12 +1813,10 @@ def main() -> None:
             "mode": "test",
             "backend": loaded.get("backend") if isinstance(loaded, dict) else None,
             "kernel_approx": loaded.get("kernel_approx") if isinstance(loaded, dict) else None,
+            "gpu_acceleration": _gpu_accel_summary(),
             "features_used": use_features,
             "evaluation": {"predicted_anomaly_rate": anomaly_rate},
         }
-
-    if args.metrics_out and metrics_to_save is not None:
-        _save_json(metrics_to_save, args.metrics_out)
 
     if args.pred_out:
         os.makedirs(os.path.dirname(args.pred_out) or ".", exist_ok=True)
@@ -1519,6 +1839,10 @@ def main() -> None:
         train_time_seconds=None,
     )
     _print_benchmark(bench_payload, title="Benchmark")
+    if metrics_to_save is not None:
+        metrics_to_save["benchmark"] = bench_payload
+    if args.metrics_out and metrics_to_save is not None:
+        _save_json(metrics_to_save, args.metrics_out)
     _save_json(bench_payload, args.benchmark_out)
 
 
