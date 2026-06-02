@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import re
+from collections import Counter
 from urllib.parse import urlsplit, parse_qsl
 from typing import Dict, Any, Optional
 
@@ -30,6 +32,25 @@ _pct_enc_re = re.compile(r"%[0-9a-fA-F]{2}")
 
 def _ratio(n: int, d: int) -> float:
     return float(n) / float(d) if d else 0.0
+
+
+def _entropy(s: str) -> float:
+    """Shannon entropy (bits) of a string. Returns 0.0 for empty or single-char strings."""
+    if not s:
+        return 0.0
+    counts = Counter(s)
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+def _char_ratios(s: str) -> tuple[float, float]:
+    """Returns (pct_digit, pct_alpha) for a string. Remaining fraction is special chars."""
+    if not s:
+        return 0.0, 0.0
+    n = len(s)
+    digits = sum(1 for c in s if c.isdigit())
+    alpha = sum(1 for c in s if c.isalpha())
+    return digits / n, alpha / n
 
 
 def extract_http_features(
@@ -67,9 +88,29 @@ def extract_http_features(
         suspicious_tokens_count += lowered.count(tok.strip().lower())
     has_suspicious_tokens = 1 if suspicious_tokens_count > 0 else 0
 
+    # --- Features de entropia y distribucion de caracteres ---
+    # Inspirados en el enfoque de Nico/Ralf (OCS-WAF 2017), que analizaban
+    # la distribucion de caracteres y la entropia de cada valor de parametro.
+    # Aqui se computan versiones globales compatibles con un modelo unico.
+
+    uri_entropy = _entropy(uri or "")
+    query_entropy = _entropy(query)
+
+    # Entropia maxima entre todos los valores de parametros de la query:
+    # captura el parametro mas anomalo (el que mas se desvía de texto normal)
+    param_value_entropies = [_entropy(v) for _, v in qsl] if qsl else [0.0]
+    max_param_value_entropy = max(param_value_entropies)
+
+    query_pct_digit, query_pct_alpha = _char_ratios(query)
+
+    # --- Features de cuerpo (body) ---
     body_suspicious_tokens_count = 0
     body_has_suspicious_tokens = 0
     body_encoded = 0.0
+    body_entropy = 0.0
+    body_pct_digit = 0.0
+    body_pct_alpha = 0.0
+
     if body:
         try:
             body_text = body.decode("utf-8", errors="ignore").lower()
@@ -82,6 +123,8 @@ def extract_http_features(
         body_has_suspicious_tokens = 1 if body_suspicious_tokens_count > 0 else 0
         enc_hits_body = len(_pct_enc_re.findall(body_text))
         body_encoded = _ratio(enc_hits_body * 3, len(body_text) if body_text else 0)
+        body_entropy = _entropy(body_text)
+        body_pct_digit, body_pct_alpha = _char_ratios(body_text)
 
     uncommon_method = 1 if method_up and method_up not in COMMON_METHODS else 0
 
@@ -101,6 +144,7 @@ def extract_http_features(
         req_content_length = body_len
 
     feats: Dict[str, Any] = {
+        # --- Features estructurales originales (26) ---
         "uri_len": uri_len,
         "path_depth": path_depth,
         "query_len": query_len,
@@ -116,6 +160,15 @@ def extract_http_features(
         "uncommon_method": uncommon_method,
         "req_content_length": req_content_length,
         "body_len": body_len,
+        # --- Features de entropia y distribucion de caracteres (8 nuevos) ---
+        "uri_entropy": uri_entropy,
+        "query_entropy": query_entropy,
+        "max_param_value_entropy": max_param_value_entropy,
+        "query_pct_digit": query_pct_digit,
+        "query_pct_alpha": query_pct_alpha,
+        "body_entropy": body_entropy,
+        "body_pct_digit": body_pct_digit,
+        "body_pct_alpha": body_pct_alpha,
     }
     feats.update(method_onehot)
     return feats
