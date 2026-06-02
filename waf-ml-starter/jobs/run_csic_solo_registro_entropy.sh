@@ -110,7 +110,7 @@ print(f"[STEP1] Nuevos features: uri_entropy, query_entropy, max_param_value_ent
 
 # Conservar columnas de etiqueta y metadata
 label_cols = [c for c in df_reg.columns if c.startswith("label_")]
-meta_cols = [c for c in ["source_file", "dataset_name", "split", "label_type_raw"] if c in df_reg.columns]
+meta_cols = [c for c in ["source_file", "dataset_name", "split", "label_type_raw"] if c in df_reg.columns and c not in label_cols]
 keep_cols = label_cols + meta_cols
 
 result = pd.concat([df_reg[keep_cols].reset_index(drop=True), feat_df], axis=1)
