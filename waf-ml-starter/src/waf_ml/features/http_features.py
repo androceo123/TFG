@@ -53,6 +53,37 @@ def _char_ratios(s: str) -> tuple[float, float]:
     return digits / n, alpha / n
 
 
+# Bin boundaries for the 5-interval character distribution (Nico/Ralf OCS-WAF 2017).
+# Frequencies are sorted descending; positions are grouped into 5 bins:
+#   i0: position 0         (most frequent char)
+#   i1: positions 1-2
+#   i2: positions 3-5
+#   i3: positions 6-9
+#   i4: positions 10+      (tail)
+_CHAR_DIST_BINS = [(0, 1), (1, 3), (3, 6), (6, 10), (10, None)]
+
+
+def _char_dist_intervals(s: str) -> list[float]:
+    """5-interval character frequency distribution (Nico/Ralf Tabla 2.3).
+
+    Computes relative frequencies of each distinct character, sorts them
+    descending, groups into 5 bins and sums each bin.  Returns a list of
+    5 floats in [0, 1] that sum to 1.0 (or all zeros for empty input).
+    Captures distribution *shape*: normal text has a smooth gradual decrease
+    whereas attacks (buffer overflow, SQLi, XSS) show irregular profiles.
+    """
+    if not s:
+        return [0.0] * 5
+    counts = Counter(s)
+    n = len(s)
+    freqs = sorted((c / n for c in counts.values()), reverse=True)
+    result = []
+    for lo, hi in _CHAR_DIST_BINS:
+        chunk = freqs[lo:hi] if hi is not None else freqs[lo:]
+        result.append(sum(chunk))
+    return result
+
+
 def extract_http_features(
     *,
     method: str,
@@ -96,10 +127,31 @@ def extract_http_features(
     uri_entropy = _entropy(uri or "")
     query_entropy = _entropy(query)
 
-    # Entropia maxima entre todos los valores de parametros de la query:
-    # captura el parametro mas anomalo (el que mas se desvía de texto normal)
+    # Entropia y distribucion por parametro (application-independent: se agrega
+    # estadisticamente sobre todos los valores, sin usar nombres de parametros).
     param_value_entropies = [_entropy(v) for _, v in qsl] if qsl else [0.0]
     max_param_value_entropy = max(param_value_entropies)
+    mean_param_value_entropy = sum(param_value_entropies) / len(param_value_entropies)
+    std_param_value_entropy = (
+        math.sqrt(
+            sum((e - mean_param_value_entropy) ** 2 for e in param_value_entropies)
+            / len(param_value_entropies)
+        )
+        if len(param_value_entropies) > 1
+        else 0.0
+    )
+
+    # 5-interval character distribution del query string completo.
+    query_char_dist = _char_dist_intervals(query)
+
+    # 5-interval character distribution del valor de parametro con mayor entropia
+    # (el mas anomalo). Application-independent: no usa nombre del parametro.
+    if qsl:
+        max_entropy_idx = param_value_entropies.index(max_param_value_entropy)
+        max_entropy_param_value = qsl[max_entropy_idx][1]
+    else:
+        max_entropy_param_value = ""
+    max_param_char_dist = _char_dist_intervals(max_entropy_param_value)
 
     query_pct_digit, query_pct_alpha = _char_ratios(query)
 
@@ -110,6 +162,10 @@ def extract_http_features(
     body_entropy = 0.0
     body_pct_digit = 0.0
     body_pct_alpha = 0.0
+    body_char_dist = [0.0] * 5
+    max_body_param_value_entropy = 0.0
+    mean_body_param_value_entropy = 0.0
+    max_body_param_char_dist = [0.0] * 5
 
     if body:
         try:
@@ -125,6 +181,22 @@ def extract_http_features(
         body_encoded = _ratio(enc_hits_body * 3, len(body_text) if body_text else 0)
         body_entropy = _entropy(body_text)
         body_pct_digit, body_pct_alpha = _char_ratios(body_text)
+        body_char_dist = _char_dist_intervals(body_text)
+
+        # Para el body tambien extraemos entropia y distribucion de cada parametro
+        # (los POST de formulario tienen pares param=valor separados por &)
+        body_qsl = parse_qsl(body_text, keep_blank_values=True)
+        if body_qsl:
+            body_param_entropies = [_entropy(v) for _, v in body_qsl]
+            max_body_param_value_entropy = max(body_param_entropies)
+            mean_body_param_value_entropy = sum(body_param_entropies) / len(body_param_entropies)
+            max_body_entropy_idx = body_param_entropies.index(max_body_param_value_entropy)
+            max_body_entropy_param_value = body_qsl[max_body_entropy_idx][1]
+            max_body_param_char_dist = _char_dist_intervals(max_body_entropy_param_value)
+        else:
+            max_body_param_value_entropy = 0.0
+            mean_body_param_value_entropy = 0.0
+            max_body_param_char_dist = [0.0] * 5
 
     uncommon_method = 1 if method_up and method_up not in COMMON_METHODS else 0
 
@@ -160,7 +232,7 @@ def extract_http_features(
         "uncommon_method": uncommon_method,
         "req_content_length": req_content_length,
         "body_len": body_len,
-        # --- Features de entropia y distribucion de caracteres (8 nuevos) ---
+        # --- Features de entropia y distribucion de caracteres (v1, 8) ---
         "uri_entropy": uri_entropy,
         "query_entropy": query_entropy,
         "max_param_value_entropy": max_param_value_entropy,
@@ -169,6 +241,36 @@ def extract_http_features(
         "body_entropy": body_entropy,
         "body_pct_digit": body_pct_digit,
         "body_pct_alpha": body_pct_alpha,
+        # --- 5-interval char distribution (v2, inspirado en Nico/Ralf Tabla 2.3) ---
+        # query string completo
+        "query_char_dist_i0": query_char_dist[0],
+        "query_char_dist_i1": query_char_dist[1],
+        "query_char_dist_i2": query_char_dist[2],
+        "query_char_dist_i3": query_char_dist[3],
+        "query_char_dist_i4": query_char_dist[4],
+        # valor de parametro query con mayor entropia (el mas anomalo)
+        "max_param_char_dist_i0": max_param_char_dist[0],
+        "max_param_char_dist_i1": max_param_char_dist[1],
+        "max_param_char_dist_i2": max_param_char_dist[2],
+        "max_param_char_dist_i3": max_param_char_dist[3],
+        "max_param_char_dist_i4": max_param_char_dist[4],
+        # body completo
+        "body_char_dist_i0": body_char_dist[0],
+        "body_char_dist_i1": body_char_dist[1],
+        "body_char_dist_i2": body_char_dist[2],
+        "body_char_dist_i3": body_char_dist[3],
+        "body_char_dist_i4": body_char_dist[4],
+        # valor de parametro body con mayor entropia
+        "max_body_param_char_dist_i0": max_body_param_char_dist[0],
+        "max_body_param_char_dist_i1": max_body_param_char_dist[1],
+        "max_body_param_char_dist_i2": max_body_param_char_dist[2],
+        "max_body_param_char_dist_i3": max_body_param_char_dist[3],
+        "max_body_param_char_dist_i4": max_body_param_char_dist[4],
+        # estadisticas de entropia entre parametros (no solo max)
+        "mean_param_value_entropy": mean_param_value_entropy,
+        "std_param_value_entropy": std_param_value_entropy,
+        "max_body_param_value_entropy": max_body_param_value_entropy,
+        "mean_body_param_value_entropy": mean_body_param_value_entropy,
     }
     feats.update(method_onehot)
     return feats
