@@ -198,15 +198,62 @@ La secuencia LogReg → RF muestra que el paradigma supervisado requiere un mode
 
 ---
 
-## Siguiente paso — E06 a E10: otros datasets
+## Retroalimentación del profesor (2026-06-02)
 
-Con PI-1 respondido sobre CSIC 2010, el protocolo experimental indica:
-- **E06:** TorpEda OCSVM (baseline one-class)
-- **E07:** TorpEda RandomForest supervisado
-- **E08:** SR-BH OCSVM
-- **E09:** SR-BH RandomForest supervisado
-- **E10:** Comparación cruzada datasets (generalización)
+Tras ver los resultados del RF (F1=0.947), el profesor señaló:
+
+1. **Entropía es importante** — `uri_entropy` es el feature #1 en importancia Gini (0.141), confirmando que añadirla fue correcto.
+2. **Char distribution puede no usarse** — los features `*_char_dist_i*` (Nico/Ralf Tabla 2.3) tienen baja importancia individual. Validar si son necesarios.
+3. **Multiclase con RF** — RandomForest es el más utilizado para clasificación multiclase. Avanzar con TorpEda.
+4. **Balanceo de clases** — importante para multiclase, usar `class_weight='balanced'`.
+5. **Feature selection** — demasiados features = más lento y difícil de explicar. Quedarse con los más importantes.
 
 ---
 
-*Fecha: 2026-06-02 | Branch: mejoras-profesor-ja*
+## Experimento E06 — Ablación de features (CSIC, RF)
+
+**Objetivo:** Aislar la contribución de cada grupo de features en el RF.
+
+**Jobs:**
+- `run_csic_rf_25feat.sh` → RF con 25 features estructurales originales
+- `run_csic_rf_34feat.sh` → RF con 34 features (25 + 8 entropía v1)
+- `run_csic_rf_top10.sh` → RF con top-10 del ranking Gini (feature selection)
+
+**Estructura de features:**
+
+| Grupo | Features | Descripción |
+|-------|----------|-------------|
+| Estructurales (25) | uri_len, path_depth, query_len, ... + method one-hot | Features básicos del proyecto |
+| Entropía v1 (8) | uri_entropy, query_entropy, body_entropy, ... | Añadidos por nosotros |
+| Char dist v2 (23) | query_char_dist_i*, body_char_dist_i*, ... | Inspirados en Nico/Ralf Tabla 2.3 |
+
+**Tabla de ablación (pendiente tras ejecutar jobs):**
+
+| Experimento | Features | F1 | Recall | Precisión | FPR | BAcc |
+|-------------|----------|-----|--------|-----------|-----|------|
+| RF thr=OPTIMO (baseline) | 57 | 0.947 | 0.919 | 0.975 | 0.007 | 0.956 |
+| RF thr=OPTIMO | 34 (25+entropía) | — | — | — | — | — |
+| RF thr=OPTIMO | 25 (solo estructurales) | — | — | — | — | — |
+| RF thr=OPTIMO | top-10 (feature selection) | — | — | — | — | — |
+
+**Hipótesis:**
+- Si RF-34 ≈ RF-57: los 23 char_dist de Nico/Ralf son prescindibles
+- Si RF-25 ≈ RF-34: la entropía tampoco aporta mucho al RF (aunque es top feature Gini)
+- Si RF-top10 ≈ RF-57: podemos explicar la detección con solo 10 features
+
+---
+
+## Siguiente paso — E07: TorpEda multiclase
+
+**Job:** `run_torpeda_rf_multiclass.sh`
+
+**Dataset TorpEda:**
+- 74.133 muestras
+- Clases: NORMAL (8.363), SQLi (43k), XSS (4.8k), SSI, BufferOverflow, CRLFi, XPath, LDAPi, FormatString, ANOMALOUS
+
+**Objetivo:** Ver si RF distingue entre tipos de ataque (no solo normal/ataque).
+El job reconstruye el parquet con 57 features y entrena RF con 25, 34 y 57 feat.
+
+---
+
+*Actualizado: 2026-06-05 | Branch: mejoras-profesor-ja*
