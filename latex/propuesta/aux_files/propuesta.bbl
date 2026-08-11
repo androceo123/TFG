@@ -1,0 +1,76 @@
+\newcommand{\etalchar}[1]{$^{#1}$}
+\begin{thebibliography}{Aut24b}
+
+\bibitem[Aut24a]{sci2024http}
+Various Authors.
+\newblock Http attack detection with multi-label evaluation.
+\newblock {\em Computers \& Security}, 2024.
+\newblock Accessed: 2025-09-21.
+
+\bibitem[Aut24b]{mdpi2024electronics}
+Various Authors.
+\newblock Multi-class web attack detection on sr-bh 2020.
+\newblock {\em Electronics}, 13(9):1711, 2024.
+\newblock Accessed: 2025-09-21.
+
+\bibitem[Aut24c]{rg2024gan}
+Various Authors.
+\newblock Reinventing web security: An enhanced cycle-consistent gan approach
+  to intrusion detection.
+\newblock
+  \url{https://www.researchgate.net/publication/380204842_Reinventing_Web_Security_An_Enhanced_Cycle-Consistent_Generative_Adversarial_Network_Approach_to_Intrusion_Detection},
+  2024.
+\newblock Accessed: 2025-09-21.
+
+\bibitem[Aut25]{arxiv2502srbh}
+Various Authors.
+\newblock Recent advances in http anomaly and attack classification (includes
+  use of sr-bh 2020).
+\newblock \url{https://arxiv.org/pdf/2502.06688v3}, 2025.
+\newblock Accessed: 2025-09-21.
+
+\bibitem[BG16]{buczak2016survey}
+Anna~L Buczak and Erhan Guven.
+\newblock A survey of data mining and machine learning methods for cyber
+  security intrusion detection.
+\newblock {\em IEEE Communications Surveys \& Tutorials}, 2016.
+
+\bibitem[Dat20]{harvard2020dataset}
+Harvard Dataverse.
+\newblock Http anomalous traffic dataset.
+\newblock
+  \url{https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/OGOIXX},
+  2020.
+\newblock Accessed: 2025-09-16.
+
+\bibitem[GP�15]{gimenez2015tfg}
+Carmen Giménez, Alejandro Pérez, and Gonzalo Álvarez.
+\newblock Trabajo final (base del proyecto nico ralf).
+\newblock \url{https://github.com/nico-ralf-ii-fpuna/tfg/}, 2015.
+\newblock Accessed: 2025-09-16.
+
+\bibitem[KM09]{khan2009survey}
+Shehroz~S Khan and Michael~G Madden.
+\newblock A survey of recent trends in one class classification.
+\newblock In {\em Irish Conference on Artificial Intelligence and Cognitive
+  Science}. Springer Berlin Heidelberg, 2009.
+
+\bibitem[KV03]{kruegel2003anomaly}
+Christopher Kruegel and Giovanni Vigna.
+\newblock Anomaly detection of web-based attacks.
+\newblock In {\em Proceedings of the 10th ACM conference on Computer and
+  communications security}. ACM, 2003.
+
+\bibitem[N{\etalchar{+}}11]{nguyen2011application}
+H.~Nguyen et~al.
+\newblock Application anomaly detection: Taxonomy, methods and systems.
+\newblock {\em ACM Computing Surveys}, 2011.
+
+\bibitem[PA15]{parhizkar2015oc}
+Elham Parhizkar and Mahdi Abadi.
+\newblock Oc-wad: A one-class classifier ensemble approach for anomaly
+  detection in web traffic.
+\newblock In {\em 2015 23rd Iranian Conference on Electrical Engineering
+  (ICEE)}. IEEE, 2015.
+
+\end{thebibliography}

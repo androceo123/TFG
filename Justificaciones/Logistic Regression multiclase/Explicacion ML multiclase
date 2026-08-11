@@ -1,0 +1,220 @@
+## AI Assistant
+Qué hace exactamente
+El script `train_supervised.py`, cuando se ejecuta con `--task multiclass`, toma un dataset ya procesado y hace esto:
+lee el dataset procesado
+usa la columna `label_multiclass`
+toma las features HTTP numéricas
+separa entrenamiento y prueba
+entrena un modelo supervisado multiclase
+evalúa resultados
+guarda modelo, métricas, predicciones y benchmark
+opcionalmente calcula importancia de variables
+puede manejar clases raras y hacer tuning interno
+
+En qué etapa del flujo está
+Este script está en la etapa de:
+Modelado + evaluación
+
+O sea, va después de:
+cargar el dataset crudo
+normalizarlo
+generar `label_multiclass`
+extraer features HTTP
+
+Y va antes de:
+análisis de resultados
+redacción de conclusiones
+comparación con otros enfoques
+
+Flujo completo multiclase en el proyecto
+1) Dataset crudo
+SR-BH / Harvard en CSV/TSV, TorpEda en XML o CSIC en TXT.
+2) Loader
+Se usa para:
+leer el archivo
+normalizar columnas
+construir etiquetas
+3) Feature engineering
+Se calculan las features HTTP manuales.
+4) Dataset procesado
+Queda una tabla lista para ML.
+5) Este script
+Entrena y evalúa el modelo multiclase.
+
+Qué pasa internamente en este script
+A. Lee el dataset procesado
+Carga el archivo `.parquet` o `.csv` que ya tiene:
+features
+`label_multiclass`
+otras columnas de soporte
+
+B. Extrae la variable objetivo
+Toma `label_multiclass` como clase única por request.
+
+Ejemplo:
+clases posibles: `["NORMAL", "CAPEC-66 SQL Injection", "CAPEC-126 Path Traversal"]`
+fila 1: `CAPEC-66 SQL Injection`
+fila 2: `NORMAL`
+
+A diferencia de multilabel, acá cada fila debe terminar con una sola clase final.
+
+C. Maneja clases raras
+Antes del split, el script puede:
+dejarlas como están
+fusionarlas en `OTHER_RARE`
+o eliminarlas
+
+Eso se controla con:
+`--rare-class-policy`
+`--rare-class-min-count`
+
+D. Separa train/test
+Usa un split externo fijo, normalmente 80/20.
+Si puede, intenta estratificar por clase.
+Si la estratificación falla por clases muy raras, cae a split no estratificado.
+
+E. Construye el modelo
+La pipeline es:
+`StandardScaler`
+`LogisticRegression`
+
+F. Qué tipo de regresión logística usa
+El script construye `LogisticRegression` con `multi_class="auto"`.
+
+Eso significa:
+si el solver es compatible con formulación multiclase nativa, scikit-learn usa regresión logística multiclase propiamente dicha
+si el solver no lo soporta, puede caer en un esquema One-vs-Rest interno
+
+Pero a nivel metodológico, en tu trabajo este bloque se presenta como:
+Regresión Logística multiclase dentro de una pipeline con `StandardScaler`
+
+G. Entrena
+Aprende una regla para asignar una sola clase final a cada request.
+
+H. Evalúa
+Calcula métricas multiclase como:
+accuracy
+balanced accuracy
+F1 micro
+F1 macro
+F1 weighted
+precision
+recall
+MCC
+matriz de confusión
+
+Y además, cuando hay probabilidades o scores:
+ROC-AUC
+PR-AUC
+
+I. Guarda resultados
+Guarda:
+modelo `.joblib`
+métricas `.json`
+predicciones `.csv`
+benchmark `.json`
+importancia de variables por coeficientes
+importancia por permutación si se solicita
+
+Qué produce este script
+Salidas principales
+1. Modelo entrenado
+Archivo `.joblib`
+2. Métricas
+Archivo `.json`
+3. Predicciones
+Archivo `.csv`
+4. Benchmark
+Archivo `.json`
+5. Importancia de features
+Archivo `.csv`
+6. Resultados de tuning
+Archivo `.csv`, si se activa
+
+Qué NO hace este script
+Este script no:
+carga el raw directamente
+construye el dataset completo desde cero
+entrena OCSVM
+hace detección one-class
+resuelve multilabel con múltiples etiquetas activas por request
+
+Eso pertenece a otras etapas o scripts.
+
+Qué relación tiene con el modelo multiclase de la tesis
+Este script es justamente la implementación práctica del enfoque multiclase del proyecto:
+una request
+una clase final
+regresión logística
+features HTTP manuales
+métricas multiclase
+interpretabilidad por coeficientes
+
+Entonces, resumido en una frase
+Este script es el que toma el dataset ya procesado y entrena el modelo multiclase final usando `StandardScaler + LogisticRegression`, evaluándolo y guardando resultados.
+
+Si quieres entenderlo por capas
+Te lo puedo desglosar en 3 niveles:
+qué entra
+qué transforma
+qué sale
+
+## Me
+O sea, ¿usa un clasificador por clase?
+
+## AI Assistant
+
+No necesariamente, y esa es una diferencia importante con multilabel.
+
+En multiclase, el objetivo final es:
+elegir una sola clase por request
+
+En tu script, eso se implementa con `LogisticRegression` multiclase.
+
+En términos prácticos:
+si el solver soporta formulación multiclase nativa, el modelo resuelve todas las clases en un mismo bloque
+si se usa un solver como `liblinear`, scikit-learn puede descomponer internamente el problema en One-vs-Rest
+
+Pero metodológicamente, en tu TFG esto sigue siendo:
+un modelo de regresión logística para clasificación multiclase
+no un esquema multilabel con varias etiquetas activas a la vez
+
+Resumen corto
+Multiclase = una sola clase final por request
+No significa “3 clasificadores” por defecto
+Puede haber tratamiento interno distinto según solver
+Pero para tu tesis el enfoque sigue siendo un baseline de Regresión Logística multiclase
+
+## Me
+¿Qué ML usa el clasificador?
+
+## AI Assistant
+
+El clasificador usa Machine Learning supervisado clásico, concretamente:
+Regresión Logística multiclase
+
+En la práctica:
+modelo base: `LogisticRegression`
+preprocesamiento: `StandardScaler`
+objetivo: `label_multiclass`
+
+Qué tipo de ML es eso
+Es un enfoque de:
+clasificación supervisada
+modelo lineal
+aprendizaje discriminativo
+clasificación de una sola clase por instancia
+
+Qué no es
+No es:
+red neuronal
+árbol de decisión
+random forest
+OCSVM
+modelo multilabel con varias salidas activas
+
+Matiz importante
+En SR-BH / Harvard, la clase multiclase no es nativa del dataset crudo.
+Ahí se deriva a partir de `label_multilabel`, eligiendo una sola etiqueta primaria por request.
+En TorpEda, en cambio, la clase multiclase sí es esencialmente nativa del problema.
+En CSIC, `label_multiclass` existe por compatibilidad del pipeline, pero en la práctica queda reducido a dos clases: `NORMAL` y la clase anómala.
