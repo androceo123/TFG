@@ -1,0 +1,1484 @@
+% ============================================================================
+% Libro de Tesis / Trabajo Final de Grado - FPUNA (ACTUALIZADO A IMPLEMENTACIÓN)
+% Autores: Andrés Román, Juan González
+% Tutor: Dr. Cristian Cappo
+% ============================================================================
+\documentclass[12pt,oneside]{report}
+
+% --- Idioma y codificación ---
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% --- Página ---
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+
+% --- Utilidades ---
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage{xurl}   % mejor corte de URLs largas
+\usepackage{float}  % para [H]
+\usepackage{placeins} % \FloatBarrier
+\usepackage{enumitem}
+\usepackage{textcomp}
+\usepackage{makecell}
+\usepackage{adjustbox}
+\usepackage{multirow}
+\usepackage{microtype}
+
+% --- Figuras (hechas en LaTeX) ---
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+
+% --- Hipervínculos ---
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue,
+  citecolor=black
+}
+
+% --- Ruta opcional de imágenes (si ponés el logo en ./images/) ---
+% \graphicspath{{images/}}
+
+% --- Columnas útiles para tabularx ---
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{C}[1]{>{\Centering\arraybackslash}p{#1}}
+
+% --- Macros útiles ---
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\sigmoid}{\sigma}
+\newcommand{\softmax}{\mathrm{softmax}}
+\newcommand{\ind}{\mathbb{I}} % función indicadora
+
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{6pt}
+\setlength{\emergencystretch}{3em}
+
+\begin{document}
+
+% ============================================================================
+% CARÁTULA
+% ============================================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+{\Large Universidad Nacional de Asunción}\\[0.25cm]
+{\Large Facultad Politécnica}\\[0.25cm]
+{\Large Ingeniería en Informática}\\[1.2cm]
+
+\IfFileExists{logoFpuna.png}{\includegraphics[width=4cm]{logoFpuna.png}}{\vspace{4cm}}\par\vspace{1.5cm}
+
+\rule{0.9\textwidth}{0.4pt}\\[0.9cm]
+{\Large Trabajo Final de Grado}\\[0.6cm]
+{\LARGE\bfseries Detección de anomalías y clasificación de ataques en tráfico HTTP: comparación entre enfoques one-class, multiclase y multietiqueta}\\[0.9cm]
+\rule{0.9\textwidth}{0.4pt}\\[1.2cm]
+
+\begin{minipage}[t]{0.45\textwidth}
+\textit{Autores:}\\[0.3cm]
+Andrés Román\\
+Juan González
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+\raggedleft
+\textit{Tutor:}\\[0.3cm]
+Dr. Cristian Cappo
+\end{minipage}
+
+\vfill
+SAN LORENZO - PARAGUAY\\
+ENERO - 2026
+\end{center}
+\end{titlepage}
+
+% ============================================================================
+% PRELIMINARES
+% ============================================================================
+\pagenumbering{roman}
+
+\chapter*{Resumen}
+Las aplicaciones web están expuestas de manera continua a ataques como inyección SQL, \textit{Cross-Site Scripting} y otras variantes de manipulación de peticiones HTTP. Detectar estos ataques de forma efectiva es un problema complejo: el tráfico legítimo presenta alta variabilidad, existe un fuerte desbalance entre peticiones normales y maliciosas, y los atacantes generan constantemente variantes o patrones de ataque para los cuales todavía no existen reglas, firmas o ejemplos suficientes en los sistemas de protección tradicionales. Los \textit{Web Application Firewalls} (WAF) basados únicamente en reglas o firmas requieren mantenimiento continuo y tienden a degradarse frente a estas variaciones, lo que limita su eficacia en escenarios cambiantes.
+
+Ante estas limitaciones, el aprendizaje automático ofrece una alternativa de análisis que permite capturar patrones en la estructura del tráfico HTTP sin depender exclusivamente de un catálogo fijo de ataques conocidos. En este trabajo se presenta un flujo reproducible de aprendizaje automático orientado a la detección de anomalías y a la clasificación de ataques en tráfico HTTP. La comparación experimental se organiza sobre tres formulaciones complementarias del problema: detección \textit{one-class}, clasificación multiclase y clasificación multietiqueta. El alcance es experimental y comparativo. No se implementa ni se despliega un \textit{Web Application Firewall} completo; en su lugar, se examina la factibilidad teórica de utilizar los modelos evaluados en un contexto tipo WAF a partir de métricas de efectividad y de costo operativo.
+
+La representación de entrada se construye sobre una base común de peticiones HTTP (\textit{requests}), definida mediante variables interpretables extraídas del método, la URI, el cuerpo y, cuando está disponible, un campo derivado de encabezados. Esa base se materializa en un conjunto fijo de veinticinco características (\textit{features}) que describen longitud, estructura, composición de caracteres, codificación, señales léxicas y atributos básicos del protocolo.
+
+La comparación experimental se distribuye sobre tres fuentes de datos con distinta granularidad de etiquetado: CSIC 2010, útil principalmente para detección binaria; CSIC/TorpEda 2012, apto para detección binaria y clasificación multiclase; y SR-BH 2020, un dataset de tráfico real de honeypot con anotación CAPEC multietiqueta. Para preservar comparabilidad entre escenarios, la implementación normaliza los campos de entrada y deriva las variables objetivo \texttt{label\_binary}, \texttt{label\_multiclass} y \texttt{label\_multilabel} según la información disponible en cada dataset.
+
+Los modelos seleccionados responden a criterios de escalabilidad, trazabilidad e interpretabilidad. Para detección \textit{one-class} se utiliza un \texttt{Pipeline} compuesto por \texttt{StandardScaler}, \texttt{Nystroem} y \texttt{SGDOneClassSVM}, entrenado únicamente con tráfico normal. Para las tareas supervisadas se emplea regresión logística lineal, mientras que para clasificación multietiqueta se adopta la descomposición \textit{One-vs-Rest}. El protocolo experimental aísla el conjunto de prueba externo, restringe el ajuste de hiperparámetros al bloque de entrenamiento y contempla tanto métricas de clasificación como métricas operativas, entre ellas latencia, \textit{throughput}, consumo de CPU y memoria, tamaño de modelo y tiempo de entrenamiento.
+
+La metodología incorpora además una comparación directa entre corridas con el conjunto completo de variables y corridas en las que se eliminan únicamente las variables basadas en tokens sospechosos. La comparación permite distinguir con mayor precisión cuánto del rendimiento observado proviene de señales estructurales del tráfico HTTP y cuánto depende de indicadores léxicos más cercanos a reglas o firmas.
+
+\chapter*{Abstract}
+A reproducible machine learning pipeline for anomaly detection and attack classification in HTTP traffic is presented. The experimental comparison covers three complementary problem formulations: \textit{one-class} detection, multiclass classification, and multilabel classification. The scope is experimental and comparative. A full \textit{Web Application Firewall} is neither implemented nor deployed; instead, the theoretical feasibility of using the evaluated models in a WAF-like setting is examined through effectiveness and operational-cost metrics.
+
+The input representation is built from a common description of HTTP requests based on interpretable variables extracted from method, URI, body, and, when available, a header-derived field. This design is materialized through a fixed set of twenty-five features describing length, structure, character composition, encoding, lexical cues, and basic protocol attributes.
+
+The experimental comparison is organized around three data sources with different labeling granularity: CSIC 2010, mainly useful for binary detection; CSIC/TorpEda 2012, suitable for binary detection and multiclass classification; and SR-BH 2020, a real honeypot dataset with CAPEC multilabel annotations. To preserve comparability across scenarios, the implementation normalizes the input fields and derives the variables \texttt{label\_binary}, \texttt{label\_multiclass}, and \texttt{label\_multilabel} according to the information available in each dataset.
+
+The selected models follow the criteria of scalability, traceability, and interpretability. For \textit{one-class} detection, the implementation uses a \texttt{Pipeline} composed of \texttt{StandardScaler}, \texttt{Nystroem}, and \texttt{SGDOneClassSVM}, trained only with normal traffic. For supervised tasks, linear logistic regression is used, while multilabel classification is handled through the \textit{One-vs-Rest} decomposition. The experimental protocol isolates an outer test set, restricts hyperparameter tuning to the training block, and considers both classification metrics and operational metrics such as latency, throughput, CPU and memory usage, model size, and training time.
+
+The methodology also includes a direct comparison between runs using the complete feature set and runs in which only suspicious-token-based variables are removed. This makes it possible to discuss more clearly how much of the observed performance comes from structural HTTP signals and how much depends on lexical indicators that are closer to signatures or rules.
+
+\chapter*{Agradecimientos}
+% TODO: completar
+
+\tableofcontents
+\listoffigures
+\clearpage
+\pagenumbering{arabic}
+
+% ============================================================================
+% CAPÍTULO 1
+% ============================================================================
+\chapter{Introducción}
+
+\section{Contexto y motivación}
+Las aplicaciones web son hoy uno de los principales vectores de ataque en sistemas de información. Ataques como inyección SQL, \textit{Cross-Site Scripting} (XSS) o manipulación de parámetros se ejecutan mediante peticiones HTTP (\textit{requests}) especialmente construidas para explotar vulnerabilidades en el servidor o en la aplicación. Este tipo de tráfico malicioso es difícil de separar del tráfico legítimo por varias razones simultáneas: el tráfico normal presenta alta variabilidad según el contexto de uso, existe un fuerte desbalance numérico entre peticiones normales y maliciosas, y los atacantes generan constantemente variantes o patrones de ataque para los cuales todavía no existen reglas, firmas o ejemplos suficientes en los sistemas de protección existentes.
+
+Frente a este problema, una solución ampliamente adoptada es el \textit{Web Application Firewall} (WAF), un componente que inspecciona el tráfico HTTP entrante y aplica políticas para mitigar ataques conocidos \cite{owasp_waf}. La variante más extendida de WAF opera mediante firmas o reglas: listas de patrones predefinidos que, al detectarse en una petición, desencadenan un bloqueo o una alerta. ModSecurity es un ejemplo representativo de este enfoque, ampliamente utilizado en producción como motor de reglas configurable para monitoreo y bloqueo de tráfico \cite{modsecurity_site}. Sin embargo, los WAF basados exclusivamente en firmas o reglas presentan limitaciones estructurales: requieren mantenimiento continuo a medida que aparecen nuevas técnicas de ataque, y tienden a degradarse frente a variaciones de la carga útil (\textit{payload}) o frente a ataques para los cuales todavía no existe una firma actualizada.
+
+Como alternativa, los enfoques basados en anomalías no dependen de un catálogo fijo de ataques conocidos. En lugar de buscar patrones explícitos, aprenden una representación del tráfico ``normal'' y marcan como sospechosas las peticiones que se desvían de esa representación. Esto resulta útil cuando la cobertura de ataques es incompleta o cambiante, ya que el modelo puede señalar actividad inusual aun sin haber visto antes un ataque de ese tipo. Trabajos clásicos como el de Kruegel y Vigna muestran que atributos estadísticos y de estructura de las peticiones HTTP permiten puntuar anomalías con buenos resultados \cite{kruegel_vigna_2003}.
+
+Sin embargo, la detección de anomalías por sí sola tiene un límite: señala que algo es inusual, pero no identifica qué tipo de ataque es. Para respuesta efectiva e investigación de incidentes, resulta valioso poder también clasificar el tipo o patrón de ataque. Esto introduce las formulaciones supervisadas, donde se dispone de etiquetas que identifican clases o categorías de ataque. El aprendizaje automático permite, en este contexto, entrenar modelos que asignan una o varias etiquetas a cada petición, aprovechando la información semántica disponible en datasets con anotación por tipo de ataque.
+
+El planteamiento adoptado en este trabajo toma como base el enfoque por anomalías y lo extiende con un dataset de tráfico HTTP real con etiquetas de ataque estructuradas según la taxonomía CAPEC, habilitando comparaciones entre la formulación \textit{one-class}, la clasificación supervisada multiclase y la clasificación multietiqueta.
+
+\section{Conceptos fundamentales}
+
+A continuación se presentan las definiciones de los conceptos centrales utilizados en este trabajo, orientadas a lectores sin experiencia previa en seguridad web o aprendizaje automático.
+
+\begin{description}[leftmargin=0pt, labelindent=0pt]
+
+  \item[\textbf{Petición HTTP (\textit{request}).}]
+  Una petición HTTP es el mensaje que un cliente (por ejemplo, un navegador web) envía a un servidor para solicitar un recurso o ejecutar una acción. Contiene al menos un método (como \texttt{GET} o \texttt{POST}), una URI que identifica el recurso, la versión del protocolo y, opcionalmente, encabezados y un cuerpo. En este trabajo, el alcance de ``petición HTTP'' se limita a los campos disponibles y normalizados en los datasets: principalmente método, URI, cuerpo y, cuando está disponible, información derivada de encabezados.
+
+  \item[\textbf{WAF (\textit{Web Application Firewall}).}]
+  Un WAF es un componente de seguridad que se interpone entre el cliente y la aplicación web para inspeccionar el tráfico HTTP y aplicar políticas de filtrado. Su objetivo es detectar y bloquear peticiones maliciosas antes de que lleguen a la aplicación.
+
+  \item[\textbf{Carga útil (\textit{payload}).}]
+  En el contexto de este trabajo, la carga útil o \textit{payload} es la parte de la petición HTTP donde pueden aparecer los datos enviados por el cliente: parámetros, cuerpo de la solicitud o cadenas utilizadas por un atacante para explotar una vulnerabilidad. Es en la carga útil donde con frecuencia se insertan los patrones maliciosos.
+
+  \item[\textbf{Firma o regla.}]
+  Una firma es un patrón predefinido que describe cómo se manifiesta un tipo de ataque conocido. Un WAF basado en firmas compara cada petición contra una lista de esos patrones y bloquea las que coinciden. Su ventaja es la alta precisión en ataques conocidos; su desventaja es que no detecta variantes para las cuales todavía no existe una firma.
+
+  \item[\textbf{Anomalía.}]
+  Una anomalía es una petición que se desvía estadística o estructuralmente del comportamiento habitual del tráfico normal. No requiere coincidir con un patrón de ataque conocido: basta con que difiera suficientemente de lo que el modelo aprendió como ``normal''.
+
+  \item[\textbf{Clasificación binaria.}]
+  Tarea de aprendizaje automático en la que el modelo asigna a cada petición una de dos etiquetas posibles: normal o ataque. Es la formulación más simple y directa para detección de intrusiones.
+
+  \item[\textbf{Clasificación multiclase.}]
+  Tarea en la que el modelo asigna a cada petición exactamente una clase entre varias posibles, por ejemplo: normal, inyección SQL, XSS, traversal de ruta, etc. Permite tipificar el ataque, pero supone que cada petición pertenece a una única categoría.
+
+  \item[\textbf{Clasificación multietiqueta.}]
+  Tarea en la que el modelo puede asignar simultáneamente más de una etiqueta a una misma petición. Es útil cuando una petición combina técnicas de varios tipos de ataque, como puede ocurrir en tráfico real anotado con la taxonomía CAPEC.
+
+  \item[\textbf{Modelo de \textit{Machine Learning} (aprendizaje automático).}]
+  A partir de un conjunto de ejemplos con características de entrada y etiquetas conocidas, un modelo de aprendizaje automático aprende una función de decisión para asignar una clase o conjunto de etiquetas a nuevos ejemplos no vistos durante el entrenamiento.
+
+\end{description}
+
+\section{Formulaciones del problema}
+
+La detección de ataques en tráfico HTTP puede formularse de maneras distintas según la información disponible y el objetivo operativo. En este trabajo se contemplan tres formulaciones complementarias:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Detección binaria u \textit{one-class}.} El objetivo es distinguir tráfico normal de tráfico anómalo o malicioso, sin identificar el tipo de ataque. La variante \textit{one-class} es especialmente relevante cuando no se dispone de ejemplos etiquetados de ataque: el modelo se entrena solo con tráfico normal y aprende a detectar desviaciones. Es útil frente a ataques novedosos o cuando el catálogo de ataques conocidos es incompleto.
+
+  \item \textbf{Clasificación multiclase.} Cuando se dispone de etiquetas que identifican el tipo de ataque, es posible entrenar un modelo que asigne una única clase o tipo principal a cada petición. Esto permite no solo detectar, sino también tipificar el ataque, lo que facilita la respuesta y el análisis forense. La limitación es que supone que cada petición pertenece a un único tipo de ataque.
+
+  \item \textbf{Clasificación multietiqueta.} En tráfico real, una misma petición puede participar de más de un patrón de ataque simultáneamente. La formulación multietiqueta permite que el modelo asigne varias etiquetas a una misma petición, conservando la riqueza semántica de la anotación original. En este trabajo, esta formulación se habilita sobre el dataset SR-BH~2020, que incorpora etiquetas según la taxonomía CAPEC.
+\end{itemize}
+
+Las tres formulaciones no son excluyentes: este trabajo las evalúa comparativamente sobre los mismos datasets y con la misma representación de entrada, para estudiar qué formulación resulta más adecuada según el tipo de datos disponible y el objetivo operativo.
+
+\section{Planteamiento del problema}
+En entornos reales existe: (i) alta variabilidad del tráfico legítimo, (ii) fuerte desbalance entre normales y ataques,
+y (iii) ataques emergentes, es decir, variantes o patrones de ataque para los cuales todavía no existen reglas, firmas o ejemplos suficientes en el sistema. Un sistema útil debe:
+\begin{itemize}[leftmargin=*]
+  \item detectar anomalías cuando hay pocos datos rotulados (o cambian los ataques), y
+  \item cuando hay etiquetas, clasificar el tipo o patrón de ataque para respuesta e investigación.
+\end{itemize}
+
+\section{Objetivos}
+\subsection{Objetivo general}
+
+El objetivo general es diseñar, implementar y evaluar un \textit{pipeline} reproducible de aprendizaje automático para
+(i) detección de anomalías/ataques en tráfico HTTP y (ii) clasificación de ataques por tipo (multiclase y, cuando aplique, multietiqueta),
+comparando un dataset de tráfico \textbf{real} recolectado en honeypot (SR-BH 2020, Harvard Dataverse) con datasets \textbf{sintéticos/benchmark}
+(CSIC 2010 y CSIC/TorpEda 2012) para estudiar \textit{domain shift}.
+Además, se analizará la \textbf{viabilidad de implementación en tiempo real} del pipeline (extracción de features + inferencia) en un entorno tipo WAF,
+midiendo eficiencia (latencia P50/P95/P99, throughput, CPU/RAM, tamaño del modelo, tiempo de entrenamiento) y funcionamiento (TPR/FPR y trade-offs FP/FN),
+y se compararán los resultados con trabajos relacionados usando un conjunto común de métricas \cite{srbh_paper,ocswaf_zenodo,riverol_2024,fang_2024,zhou_2024,saito_pr_auc,chicco_mcc}.
+
+En términos experimentales, la comparación se construye sobre una misma representación de peticiones HTTP aplicada a tres datasets y a tres formulaciones del problema. El contraste no se limita al rendimiento predictivo: incorpora también costo computacional, estabilidad y trazabilidad de las decisiones, de modo que la discusión final distinga con claridad entre el aporte de cada modelo y las exigencias propias de cada escenario de datos.
+
+
+\subsection{Objetivos específicos}
+\begin{itemize}[leftmargin=*]
+  \item Implementar un pipeline de extracción de \textbf{25 características} desde método, URI, cuerpo HTTP y, cuando esté disponible, un campo derivado de \textit{headers} (\texttt{req\_content\_length}), alineado con literatura de detección en requests.
+  \item Unificar y evaluar tres fuentes de datos: SR-BH 2020 (tráfico real de honeypot con etiquetas CAPEC) \cite{srbh_dataverse,srbh_paper}, y dos datasets sintéticos/benchmark (CSIC 2010 y CSIC/TorpEda 2012) \cite{csic2010_impact,csic2010_doc,torpeda_2012}.
+  \item Entrenar y comparar \textbf{tres configuraciones/modelos} sobre los \textbf{tres datasets}, \textbf{adaptando la tarea a la disponibilidad de etiquetas} de cada dataset: (i) un detector one-class escalable para detección binaria (normal/anómalo) entrenado solo con normales, implementado como \texttt{StandardScaler + Nystroem + SGDOneClassSVM} \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}; (ii) regresión logística supervisada lineal como baseline eficiente \cite{islr_logreg,sklearn_logreg} (multiclase cuando el dataset provea tipo de ataque o etiqueta primaria; en CSIC~2010 se restringe a binario); (iii) One-vs-Rest (OvR) como baseline multi-salida \cite{tsoumakas_multilabel_overview,rifkin_ova} (multietiqueta CAPEC en SR-BH; en TorpEda se usa en modo multiclase o binario cuando corresponda; en CSIC~2010 se restringe a binario).
+  \item Definir una metodología experimental \textbf{sin contaminación entre entrenamiento, validación y prueba}: en supervisado, usar particionado externo \textbf{80/20} del total del dataset; y en el detector one-class, entrenar \textbf{solo con el 80\% del tráfico normal} y evaluar sobre un conjunto mixto compuesto por el \textbf{20\% de normales en holdout} y el \textbf{total de anomalías/ataques disponibles}, realizando la selección de hiperparámetros \textbf{solo sobre el conjunto habilitado para entrenamiento} y con presupuesto computacional fijo.
+  \item Reportar \textbf{métricas de efectividad} alineadas con trabajos relacionados: Accuracy, Precision/Recall/F1 (micro/macro/weighted), TPR/FPR, Specificity, ROC-AUC y PR-AUC \cite{saito_pr_auc}, además de MCC como métrica robusta al desbalance \cite{chicco_mcc}. En multietiqueta: Hamming Loss, Jaccard Similarity y Exact Match Ratio \cite{srbh_paper,tsoumakas_multilabel_overview}.
+  \item Medir \textbf{métricas de eficiencia/tiempo real}: latencia P50/P95/P99 del pipeline (feature extraction + inferencia), throughput (req/s), CPU/RAM, tamaño del modelo y tiempo de entrenamiento; y estabilidad bajo carga \cite{ocswaf_zenodo}.
+  \item Analizar el aporte de las \textit{features} mediante una estrategia eficiente: coeficientes estandarizados en los modelos lineales, ablaciones por grupos y comparación \textbf{con y sin tokens sospechosos}, priorizando interpretabilidad con costo computacional controlado.
+  \item Comparar resultados con los reportados en literatura sobre CSIC/TorpEda/SR-BH, alineando tareas y métricas, y documentando amenazas a validez cuando difieran \textit{splits}, preprocesamiento o definición de etiquetas \cite{riverol_2024,fang_2024,zhou_2024}.
+\end{itemize}
+
+\section{Contribuciones}
+\begin{itemize}[leftmargin=*]
+  \item Pipeline reproducible de preprocesamiento y extracción de características HTTP (25 features) a partir de método, URI, body y un campo derivado de headers cuando esté disponible.
+  \item Definición e implementación de etiquetas \texttt{label\_binary}, \texttt{label\_multiclass} y \texttt{label\_multilabel} para tareas comparables entre datasets.
+  \item Política explícita para derivar \texttt{label\_multiclass} desde la anotación CAPEC multietiqueta de SR-BH mediante una regla determinista basada en severidad, conservando columnas auxiliares de auditoría para revisar la etiqueta primaria elegida.
+  \item Adopción de un detector \textit{one-class} escalable basado en \texttt{SGDOneClassSVM} con aproximación de kernel, manteniendo el criterio de entrenar exclusivamente con tráfico normal.
+  \item Baselines supervisados lineales implementados en \texttt{scikit-learn}: regresión logística para tareas multiclase y \textit{One-vs-Rest} para salidas multietiqueta, con configuraciones compatibles con el tamaño de los datasets y con análisis posterior por coeficientes.
+  \item Selección opcional de hiperparámetros mediante búsquedas acotadas dentro del bloque de entrenamiento, usando el esquema que corresponda a cada script y guardando los resultados de búsqueda para trazabilidad \cite{sklearn_randomsearch,sklearn_halving}.
+  \item Importancia de características basada en coeficientes estandarizados y ablaciones por grupos, manteniendo el análisis interpretativo dentro del presupuesto computacional del estudio.
+  \item Documento técnico con análisis crítico de decisiones de modelado, compromisos entre costo y rendimiento, y amenazas a la validez.
+\end{itemize}
+
+\chapter{Marco teórico}
+
+Este capítulo presenta los conceptos fundamentales que sustentan el trabajo. Se describe el protocolo HTTP como superficie de ataque, se caracterizan los enfoques de protección basados en firmas y en anomalías, y se exponen los fundamentos de los modelos de aprendizaje automático utilizados.
+
+\section{El protocolo HTTP y la superficie de ataque}
+
+El protocolo HTTP (\textit{HyperText Transfer Protocol}) es el protocolo de comunicación sobre el cual se construyen las aplicaciones web modernas. De acuerdo con el estándar, una petición HTTP (\textit{request}) está compuesta por los siguientes elementos: un \textbf{método} que indica la acción solicitada (por ejemplo, \texttt{GET} para recuperar un recurso o \texttt{POST} para enviar datos), una \textbf{URI} (\textit{Uniform Resource Identifier}) que identifica el recurso objetivo incluyendo el \textit{path} y, opcionalmente, una cadena de parámetros (\textit{query string}), la \textbf{versión del protocolo}, un conjunto de \textbf{cabeceras} (\textit{headers}) que transportan metadatos de la comunicación y, en algunos métodos como \texttt{POST} o \texttt{PUT}, un \textbf{cuerpo} (\textit{body}) opcional que contiene los datos enviados por el cliente \cite{owasp_waf}.
+
+En el alcance de este trabajo, no se procesa necesariamente el mensaje HTTP completo tal como circula por la red. En cambio, se utilizan los campos disponibles y normalizados en los datasets analizados: principalmente el método, la URI, el cuerpo y, cuando está disponible, información derivada de cabeceras. Esta aclaración es importante para interpretar correctamente la representación de entrada utilizada por los modelos.
+
+Los ataques web explotan los campos de la petición HTTP para manipular el comportamiento de la aplicación. Los patrones maliciosos tienden a manifestarse como: valores de longitud atípica en la URI o el cuerpo, estructuras inusuales en los parámetros, secuencias de codificación (\textit{percent-encoding}) empleadas para ofuscar instrucciones maliciosas, y presencia de tokens específicos asociados a familias de ataque como inyección SQL o XSS. Los WAF inspeccionan precisamente esos campos para aplicar políticas de filtrado \cite{owasp_waf,modsecurity_site}.
+
+\section{WAF: enfoque por firmas frente a enfoque por anomalías}
+
+Existen dos grandes aproximaciones para la detección de ataques en tráfico HTTP: los enfoques basados en firmas o reglas, y los enfoques basados en anomalías. Comprender sus ventajas y limitaciones es fundamental para justificar el uso de aprendizaje automático en este dominio.
+
+\subsection{Enfoque basado en firmas o reglas}
+
+En un WAF basado en firmas, el sistema mantiene un conjunto de patrones predefinidos que describen cómo se manifiestan los ataques conocidos. Cada petición entrante se compara contra esos patrones; si coincide con alguno, se bloquea o se genera una alerta. ModSecurity es un ejemplo representativo y ampliamente utilizado de este enfoque: actúa como motor de reglas configurable que permite definir, actualizar y aplicar políticas de filtrado sobre tráfico HTTP real \cite{modsecurity_site}. Se menciona aquí porque ilustra con claridad el paradigma de protección basado en firmas, útil para contrastar con los enfoques basados en anomalías y en aprendizaje automático que se estudian en este trabajo.
+
+\textbf{Ventajas:} alta precisión para ataques conocidos y cubiertos por las reglas; bajo índice de falsos positivos cuando las reglas están bien ajustadas; razonamiento directo sobre la causa del bloqueo.
+
+\textbf{Limitaciones:} requiere mantenimiento continuo a medida que surgen nuevas técnicas de ataque; puede fallar ante variantes o mutaciones de ataques conocidos para los cuales no existe todavía una regla; el catálogo de firmas puede volverse extenso y costoso de gestionar.
+
+\subsection{Enfoque basado en anomalías}
+
+En un WAF basado en anomalías, el sistema no depende de patrones predefinidos de ataque. En cambio, aprende una representación del tráfico ``normal'' y detecta como sospechosas las peticiones que se desvían de esa representación. Esto lo hace útil cuando la cobertura de ataques conocidos es incompleta o cambiante, ya que puede señalar actividad inusual sin necesidad de haber visto antes ese tipo de ataque específico.
+
+En el dominio web, trabajos clásicos como el de Kruegel y Vigna demostraron que atributos estadísticos y estructurales de las peticiones HTTP —como longitudes, distribución de caracteres o frecuencia de parámetros— permiten construir modelos de normalidad efectivos para puntuar anomalías \cite{kruegel_vigna_2003}.
+
+\textbf{Ventajas:} capacidad de detectar ataques novedosos o variantes no contempladas en un catálogo; no requiere actualización manual de reglas; puede adaptarse a cambios en el perfil del tráfico normal.
+
+\textbf{Limitaciones:} puede generar mayor tasa de falsos positivos si el tráfico normal es muy diverso o variable; las decisiones son más difíciles de explicar que en el enfoque de firmas; requiere datos de entrenamiento representativos del tráfico legítimo.
+
+\section{CAPEC como taxonomía de patrones de ataque}
+
+CAPEC (\textit{Common Attack Pattern Enumeration and Classification}) es una taxonomía de patrones de ataque mantenida por MITRE que describe, de forma estructurada, los mecanismos mediante los cuales se explotan vulnerabilidades en sistemas de software \cite{capec_home,capec_about}. A diferencia de una lista de vulnerabilidades, CAPEC enumera los \textit{patrones de ataque}: las secuencias de acciones que un atacante puede llevar a cabo para comprometer un sistema, independientemente de la tecnología específica involucrada.
+
+En este trabajo, CAPEC se utiliza como esquema semántico para clasificar los ataques presentes en el dataset SR-BH~2020. Cada petición maliciosa del dataset puede estar anotada con una o varias etiquetas CAPEC, lo que habilita la formulación multietiqueta del problema. Antes de usar estas etiquetas en las secciones matemáticas y metodológicas que siguen, conviene tener presente que una etiqueta CAPEC identifica un patrón de ataque, no una vulnerabilidad ni un vector técnico específico.
+
+\section{Fundamentos matemáticos de los modelos}
+
+Esta sección presenta la formulación matemática de los modelos utilizados y fija una notación única para que los símbolos de las ecuaciones sean consistentes a lo largo del documento. Todo el contenido de esta sección es de naturaleza conceptual y teórica; las decisiones concretas de implementación se presentan en el capítulo de Metodología propuesta.
+
+\subsection{Tarea de clasificación en aprendizaje automático}
+
+En aprendizaje automático, una tarea de clasificación consiste en lo siguiente: dado un conjunto de ejemplos etiquetados, donde cada ejemplo tiene un vector de características de entrada y una o varias etiquetas conocidas como salida, el objetivo es aprender una función de decisión que permita asignar una clase o conjunto de etiquetas a nuevos ejemplos no vistos durante el entrenamiento. La calidad del modelo se evalúa comparando sus predicciones con las etiquetas reales en un conjunto de prueba separado.
+
+En el contexto de este trabajo, cada ejemplo es una petición HTTP (\textit{request}), el vector de características (\textit{features}) se extrae de los campos del protocolo, y las etiquetas pueden ser binarias (normal/ataque), multiclase (tipo de ataque) o multietiqueta (conjunto de patrones CAPEC activos).
+
+\subsection{Notación y definición de variables}
+
+\subsubsection{Tabla de símbolos}
+
+La siguiente tabla resume los símbolos que se utilizan en las ecuaciones de esta sección. Se presenta al inicio para facilitar la lectura; los símbolos se usan posteriormente en las definiciones de modelos y métricas.
+
+\begin{longtable}{@{}ll@{}}
+\toprule
+\textbf{Símbolo} & \textbf{Significado exacto} \\
+\midrule
+$n$ & cantidad total de peticiones HTTP del dataset \\
+$d$ & cantidad de características numéricas por petición \\
+$K$ & cantidad de clases en clasificación multiclase \\
+$L$ & cantidad de etiquetas en clasificación multietiqueta \\
+$x_i \in \R^d$ & vector de características de la petición $i$ \\
+$X \in \R^{n\times d}$ & matriz con todas las peticiones (filas) y características (columnas) \\
+$y_i$ & variable objetivo binaria o multiclase de la petición $i$ \\
+$y \in \{0,1\}^n$ & vector de variables objetivo binarias de todas las peticiones \\
+$y \in \{1,\dots,K\}^n$ & vector de variables objetivo multiclase de todas las peticiones \\
+$y_i \in \{0,1\}^L$ & vector de etiquetas multietiqueta para la petición $i$ \\
+$Y \in \{0,1\}^{n\times L}$ & matriz de etiquetas multietiqueta para todo el dataset \\
+$\hat{y}, \hat{Y}$ & predicciones del modelo \\
+$\ind[\cdot]$ & función indicadora \\
+\bottomrule
+\end{longtable}
+
+\subsubsection{Dataset, características y variables objetivo}
+
+Sea un conjunto de $n$ peticiones HTTP. Cada petición se transforma en un vector numérico de $d$ características (\textit{features}) extraídas de método, URI, cuerpo y, cuando está disponible, información derivada de encabezados. Definimos:
+
+\begin{itemize}[leftmargin=*]
+  \item $x_i \in \R^d$: vector de características de la petición $i$ (una fila del dataset).
+  \item $X \in \R^{n \times d}$: matriz de diseño; su fila $i$ es $x_i^\top$ (todas las peticiones juntas).
+\end{itemize}
+
+La variable objetivo (\textit{label}) depende de la tarea:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Binaria:} $y_i \in \{0,1\}$, donde $y_i=0$ indica tráfico normal y $y_i=1$ indica ataque o anomalía.
+        El vector completo es $y \in \{0,1\}^n$.
+  \item \textbf{Multiclase:} $y_i \in \{1,\dots,K\}$, donde $K$ es el número de clases (por ejemplo, \texttt{NORMAL} más clases CAPEC o un agrupamiento por tipo de ataque).
+        El vector completo es $y \in \{1,\dots,K\}^n$.
+  \item \textbf{Multietiqueta:} $y_i \in \{0,1\}^L$, donde $L$ es el número de etiquetas posibles.
+        El componente $y_{i\ell}=1$ indica que la petición $i$ activa la etiqueta $\ell$.
+        El conjunto completo se representa como $Y \in \{0,1\}^{n \times L}$.
+\end{itemize}
+
+Además se usa la \textbf{función indicadora} $\ind[\cdot]$, que vale 1 si la condición entre corchetes es verdadera y 0 si es falsa. Se introduce porque se emplea en la expresión de predicciones binarias, en la definición de coincidencias exactas entre predicción y etiqueta real, y en el cálculo de métricas de evaluación como la exactitud y el \textit{Exact Match Ratio}.
+
+Las predicciones del modelo se denotan $\hat{y}$ o $\hat{Y}$, con la misma forma que las variables objetivo correspondientes.
+
+\subsection{Detector one-class}
+\subsubsection{Intuición}
+El enfoque \textit{one-class} modela el soporte del tráfico normal y marca como anómalas las requests que quedan fuera de esa región. Conceptualmente, esto conserva la motivación original de los WAF basados en anomalías: aprender qué aspecto tiene el tráfico legítimo HTTP y detectar desvíos aun cuando no exista un catálogo completo de ataques.
+
+\subsubsection{Formulación conceptual}
+Sea $x \in \mathbb{R}^d$ el vector de características de una petición HTTP. El objetivo de un detector \textit{one-class} es aprender una región del espacio de características que represente el soporte del tráfico normal. Para ello puede emplearse una transformación $z(x) \in \mathbb{R}^m$ que mapea la representación original a un espacio de mayor dimensionalidad mediante una aproximación de kernel. Sobre esa representación, el detector aprende un hiperplano que separa el tráfico normal del origen en el espacio transformado. La función de decisión tiene la forma:
+\[
+f(x)=\operatorname{sign}\big(w^\top z(x)-\rho\big).
+\]
+Las peticiones para las cuales $f(x) < 0$ se clasifican como anomalías.
+
+\subsubsection{Justificación del enfoque one-class}
+El uso de un detector \textit{one-class} se justifica cuando no se dispone de un catálogo completo de ataques etiquetados: el modelo se entrena exclusivamente con tráfico normal y detecta desviaciones respecto a ese soporte aprendido. Esto lo hace útil frente a variantes o patrones de ataque nuevos, para los cuales no existen todavía ejemplos en el conjunto de entrenamiento. Además, cuando el volumen de datos es grande, resulta conveniente utilizar una variante escalable del detector que mantenga el costo computacional de entrenamiento e inferencia en un rango práctico \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}. La elección específica de implementación se detalla en el capítulo de Metodología propuesta.
+
+\subsection{Regresión logística}
+\subsubsection{Caso binario}
+La regresión logística modela la probabilidad de ataque (clase 1) como:
+\[
+P(y=1\mid x)=\sigmoid(z), \quad z=w^\top x + b, \quad \sigmoid(z)=\frac{1}{1+e^{-z}}.
+\]
+
+Definición exacta:
+\begin{itemize}[leftmargin=*]
+  \item $x \in \R^d$: vector de features de una request.
+  \item $w \in \R^d$: vector de pesos (importancia de cada feature).
+  \item $b \in \R$: sesgo (intercept).
+  \item $z \in \R$: score lineal (antes de la sigmoide).
+  \item $P(y=1\mid x)$: probabilidad estimada de que la request sea ataque.
+\end{itemize}
+
+\subsubsection{Función de pérdida (log-loss) con regularización}
+Para un dataset binario $\{(x_i,y_i)\}_{i=1}^n$ con $y_i\in\{0,1\}$ y $p_i=P(y=1\mid x_i)$, la pérdida promedio es:
+
+\[
+\mathcal{L}(w,b)= -\frac{1}{n}\sum_{i=1}^n \Big(y_i\log(p_i) + (1-y_i)\log(1-p_i)\Big) + \frac{\lambda}{2}\lVert w\rVert^2.
+\]
+
+Definición exacta:
+\begin{itemize}[leftmargin=*]
+  \item $\mathcal{L}(w,b)$: función objetivo a minimizar.
+  \item $p_i=\sigmoid(w^\top x_i + b)$.
+  \item $\lambda \ge 0$: fuerza de regularización $L2$ (penaliza pesos grandes).
+\end{itemize}
+
+\subsubsection{Figura de la sigmoide}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.70\textwidth,
+  height=0.35\textwidth,
+  xlabel={$z$},
+  ylabel={$\sigmoid(z)$},
+  domain=-6:6,
+  samples=200,
+  grid=both
+]
+\addplot {1/(1+exp(-x))};
+\end{axis}
+\end{tikzpicture}
+\caption{Función sigmoide usada por regresión logística \cite{islr_logreg}.}
+\label{fig:sigmoid}
+\end{figure}
+
+\subsubsection{Multiclase (softmax)}
+Para $K$ clases, el modelo asigna un score por clase:
+\[
+s_k(x)=w_k^\top x + b_k, \quad k=1,\dots,K,
+\]
+y convierte esos scores en probabilidades con softmax:
+\[
+P(y=k\mid x)=\frac{\exp(s_k(x))}{\sum_{j=1}^K \exp(s_j(x))}.
+\]
+
+Definición exacta:
+\begin{itemize}[leftmargin=*]
+  \item $w_k \in \R^d$: vector de pesos de la clase $k$.
+  \item $b_k \in \R$: sesgo de la clase $k$.
+  \item $s_k(x)\in\R$: score lineal para la clase $k$.
+  \item $P(y=k\mid x)$: probabilidad predicha de la clase $k$.
+\end{itemize}
+
+La pérdida típica (entropía cruzada multiclase) sobre $\{(x_i,y_i)\}_{i=1}^n$ es:
+\[
+\mathcal{L} = -\frac{1}{n}\sum_{i=1}^n \log P(y=y_i\mid x_i) + \frac{\lambda}{2}\sum_{k=1}^K \lVert w_k\rVert^2.
+\]
+
+\subsubsection{Criterios de selección}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Baseline supervisado simple e interpretable}: establece una línea base clara antes de modelos más complejos \cite{islr_logreg}.
+  \item \textbf{\texttt{class\_weight="balanced"} (multiclase)}: re-pondera clases inversamente a su frecuencia en el entrenamiento \cite{sklearn_logreg}.
+  \item \textbf{Escalado}: mejora estabilidad numérica y convergencia del optimizador \cite{sklearn_logreg}.
+\end{itemize}
+
+\subsection{Clasificación multietiqueta con One-vs-Rest (OvR)}
+En multietiqueta cada request puede pertenecer a múltiples etiquetas. One-vs-Rest entrena un clasificador binario por etiqueta:
+para cada $\ell \in \{1,\dots,L\}$,
+\[
+P(y_\ell=1\mid x)=\sigmoid(w_\ell^\top x + b_\ell).
+\]
+
+Definición exacta:
+\begin{itemize}[leftmargin=*]
+  \item $\ell$: índice de etiqueta (de 1 a $L$).
+  \item $w_\ell \in \R^d$, $b_\ell \in \R$: parámetros del clasificador de la etiqueta $\ell$.
+  \item $y_\ell \in \{0,1\}$: variable que indica presencia (1) o ausencia (0) de la etiqueta $\ell$.
+\end{itemize}
+
+Para convertir probabilidades en predicción binaria se aplica un umbral (típicamente $\tau_\ell=0.5$):
+\[
+\hat{y}_{\ell} = \ind\big[P(y_\ell=1\mid x)\ge \tau_\ell\big].
+\]
+
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=0.9cm},
+  arrow/.style={-Latex, thick}
+]
+\node[block] (x) {$x$\\(features HTTP)};
+\node[block, right=1.8cm of x] (c1) {Clasificador\\$\ell=1$};
+\node[block, above=0.7cm of c1] (c2) {Clasificador\\$\ell=2$};
+\node[block, below=0.7cm of c1] (c3) {Clasificador\\$\ell=L$};
+
+\node[block, right=2.1cm of c1] (thr) {Umbral /\\Calibración};
+\node[block, right=1.8cm of thr] (y) {$\hat{y}\in\{0,1\}^L$\\(multietiqueta)};
+
+\draw[arrow] (x) -- (c1);
+\draw[arrow] (x) -- (c2);
+\draw[arrow] (x) -- (c3);
+
+\draw[arrow] (c2) -- (thr);
+\draw[arrow] (c1) -- (thr);
+\draw[arrow] (c3) -- (thr);
+
+\draw[arrow] (thr) -- (y);
+\end{tikzpicture}%
+}
+\caption{Esquema One-vs-Rest para multietiqueta: un clasificador binario por etiqueta \cite{tsoumakas_multilabel_overview,rifkin_ova}.}
+\label{fig:ovr}
+\end{figure}
+
+\subsection{Métricas de evaluación}
+\subsubsection{Binario}
+Para evaluación binaria definimos:
+\begin{itemize}[leftmargin=*]
+  \item $TP$ (true positives): ataques/anómalos correctamente predichos como ataque.
+  \item $FP$ (false positives): normales predichos erróneamente como ataque.
+  \item $FN$ (false negatives): ataques predichos erróneamente como normal.
+  \item $TN$ (true negatives): normales correctamente predichos como normal.
+\end{itemize}
+
+Con estos conteos, las métricas exportadas por los scripts se calculan así:
+\[
+\mathrm{Accuracy}=\frac{TP+TN}{TP+TN+FP+FN},\qquad
+\mathrm{Balanced\ Accuracy}=\frac{1}{2}\left(\frac{TP}{TP+FN}+\frac{TN}{TN+FP}\right).
+\]
+\[
+\mathrm{Precision}=\frac{TP}{TP+FP},\qquad
+\mathrm{Recall}=\mathrm{TPR}=\frac{TP}{TP+FN},\qquad
+F_1=\frac{2\cdot \mathrm{Precision}\cdot \mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.
+\]
+\[
+\mathrm{Specificity}=\mathrm{TNR}=\frac{TN}{TN+FP},\qquad
+\mathrm{FPR}=\frac{FP}{FP+TN}=1-\mathrm{Specificity},\qquad
+\mathrm{FNR}=\frac{FN}{FN+TP}=1-\mathrm{Recall}.
+\]
+
+Como medida balanceada entre las cuatro celdas de la matriz de confusión se reporta el \textit{Matthews Correlation Coefficient} (MCC),
+recomendado como métrica robusta en escenarios desbalanceados \cite{chicco_mcc}:
+\[
+\mathrm{MCC}=\frac{TP\cdot TN - FP\cdot FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}.
+\]
+
+Cuando el modelo entrega un score continuo, también se calculan ROC-AUC y PR-AUC a partir de dicho score. En los scripts binarios esto se hace con
+\texttt{roc\_auc\_score(y\_true, y\_score)} y \texttt{average\_precision\_score(y\_true, y\_score)}. PR-AUC se conserva porque resulta más informativa que ROC-AUC cuando la clase positiva es minoritaria \cite{saito_pr_auc}.
+
+\subsubsection{Multiclase: accuracy, promedios micro/macro/weighted y MCC}
+En multiclase, sea $K$ la cantidad de clases y sea $TP_k,FP_k,FN_k$ el conteo asociado a la clase $k$ tratada en esquema \emph{one-vs-rest}. En la implementación se reportan:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Accuracy:} proporción de instancias correctamente clasificadas.
+  \[
+  \mathrm{Accuracy}=\frac{1}{n}\sum_{i=1}^{n}\ind[\hat y_i=y_i].
+  \]
+  \item \textbf{Balanced Accuracy:} promedio del recall por clase.
+  \[
+  \mathrm{Balanced\ Accuracy}=\frac{1}{K}\sum_{k=1}^{K}\frac{TP_k}{TP_k+FN_k}.
+  \]
+  \item \textbf{Precision, Recall y $F_1$ micro:} se calculan agregando primero todos los $TP_k$, $FP_k$ y $FN_k$.
+  \[
+  \mathrm{Precision}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FP_k)},\qquad
+  \mathrm{Recall}_{micro}=\frac{\sum_k TP_k}{\sum_k(TP_k+FN_k)}.
+  \]
+  \item \textbf{Precision, Recall y $F_1$ macro:} promedio simple de la métrica por clase.
+  \[
+  \mathrm{Precision}_{macro}=\frac{1}{K}\sum_{k=1}^{K}\mathrm{Precision}_k,
+  \qquad
+  F_{1,macro}=\frac{1}{K}\sum_{k=1}^{K}F_{1,k}.
+  \]
+  \item \textbf{Precision, Recall y $F_1$ weighted:} promedio por clase ponderado por su soporte real.
+  Si $s_k$ es la cantidad de ejemplos verdaderos de la clase $k$ y $\sum_k s_k=n$,
+  \[
+  F_{1,weighted}=\sum_{k=1}^{K}\frac{s_k}{n}F_{1,k}.
+  \]
+  Los mismos pesos se usan para las versiones \textit{weighted} de precision y recall.
+  \item \textbf{MCC multiclase:} se calcula con la generalización implementada por \texttt{matthews\_corrcoef}, adecuada para más de dos clases.
+\end{itemize}
+
+Si $K=2$ y el modelo entrega probabilidades, los scripts supervisados agregan además ROC-AUC, PR-AUC, specificity, FPR, FNR y TPR. Si $K>2$, exportan \texttt{roc\_auc\_ovr\_macro}, \texttt{roc\_auc\_ovr\_weighted}, \texttt{pr\_auc\_macro} y \texttt{pr\_auc\_weighted}, calculadas sobre una binarización one-vs-rest de las clases.
+
+\subsubsection{Multietiqueta: Hamming Loss, Jaccard y coincidencia exacta}
+En multietiqueta, $Y\in\{0,1\}^{n\times L}$ y $\hat{Y}\in\{0,1\}^{n\times L}$. Cada request puede activar ninguna, una o varias etiquetas.
+
+\paragraph{Hamming Loss.}
+Mide el error promedio por decisión etiqueta-por-request:
+\[
+\mathrm{HL}=\frac{1}{nL}\sum_{i=1}^n\sum_{\ell=1}^L \ind\big[\hat{y}_{i\ell}\ne y_{i\ell}\big].
+\]
+Un valor menor indica mejor desempeño.
+
+\paragraph{Precision, Recall y $F_1$ micro/macro.}
+Los scripts multilabel calculan versiones micro y macro de precision, recall y $F_1$:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Micro:} agrega todas las decisiones positivas de todas las etiquetas antes de calcular la métrica.
+  \item \textbf{Macro:} calcula la métrica por etiqueta y luego promedia en forma simple.
+\end{itemize}
+
+\paragraph{Jaccard Similarity.}
+Para una request $i$, con conjuntos de etiquetas verdaderas $Y_i$ y predichas $\hat{Y}_i$,
+\[
+J_i = \frac{|Y_i \cap \hat{Y}_i|}{|Y_i \cup \hat{Y}_i|}.
+\]
+En la implementación aparecen tres variantes, según el script:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Jaccard micro:} agrega todos los aciertos y errores de todas las etiquetas.
+  \item \textbf{Jaccard macro:} promedia el Jaccard por etiqueta.
+  \item \textbf{Jaccard samples:} promedia $J_i$ por instancia. Esta variante aparece en el script multietiqueta dedicado cuando el problema no cae en modo binario reducido.
+\end{itemize}
+
+\paragraph{Exact Match Ratio.}
+También llamado \textit{subset accuracy}, mide la proporción de requests cuya predicción multilabel coincide exactamente con el conjunto verdadero:
+\[
+\mathrm{EMR}=\frac{1}{n}\sum_{i=1}^n \ind[\hat{Y}_i = Y_i].
+\]
+
+\paragraph{AUC multilabel.}
+Cuando el script dispone de scores continuos por etiqueta, también calcula \texttt{pr\_auc\_micro}, \texttt{pr\_auc\_macro}, \texttt{roc\_auc\_micro} y \texttt{roc\_auc\_macro}. Además, en el análisis por etiqueta se repiten precision, recall, $F_1$, Jaccard y, cuando corresponde, ROC-AUC y PR-AUC para cada CAPEC.
+
+\subsubsection{Métricas temporales y operativas}
+Además de las métricas predictivas, los scripts exportan o permiten reconstruir métricas operativas necesarias para discutir viabilidad.
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Tiempo de optimización de parámetros:}
+  \[
+  t_{opt}=t_{fin\_busqueda}-t_{inicio\_busqueda}.
+  \]
+  En los bloques con \texttt{GridSearchCV}, \texttt{RandomizedSearchCV} o \textit{halving}, coincide con el tiempo transcurrido de \texttt{search.fit(...)}; en el \textit{one-class}, con el tiempo total de evaluación de candidatos sobre el \textit{holdout} interno. Los scripts actuales ya miden este intervalo en consola y aquí se lo reporta como tiempo de optimización para mantener completo el bloque temporal del protocolo. Cuando una corrida se ejecuta con el ajuste de hiperparámetros desactivado, $t_{opt}$ no corresponde a una medición válida y debe leerse como \textit{no aplica}. En particular, la ablación multietiqueta con y sin tokens sospechosos fue implementada para ejecutar la variante ablacionada sin reoptimización adicional, salvo habilitación expresa de un re-ajuste. De ese modo, la diferencia entre la variante base y la variante ablacionada queda asociada a la retirada de ese grupo de variables y no a una nueva búsqueda de hiperparámetros. Si en algún cuadro de síntesis se fuerza un \texttt{0.00} para conservar la forma tabular, ese valor no describe un tiempo cronometrado nulo, sino la ausencia del bloque de búsqueda en esa corrida.
+
+  \item \textbf{Tiempo de construcción del modelo:}
+  \[
+  t_{build}=t_{fin\_fit}-t_{ini\_fit}.
+  \]
+  En la implementación se exporta como \texttt{train\_time\_seconds}.
+
+  \item \textbf{Tiempo de aplicación del modelo:}
+  se mide en el benchmark como tiempo total del lazo de evaluación:
+  \[
+  t_{apply}=\texttt{wall\_time\_seconds}.
+  \]
+  Este valor se complementa con latencias por request para separar el costo de extracción de features y el costo de inferencia.
+
+  \item \textbf{Throughput:}
+  \[
+  \mathrm{Throughput}=\frac{\texttt{successful\_requests}}{\texttt{wall\_time\_seconds}}.
+  \]
+
+  \item \textbf{Tasa de solicitudes fallidas del benchmark:}
+  este indicador no describe un ``fallo del modelo'' ni un error de clasificación, sino la proporción de solicitudes que no pudieron completarse correctamente durante la medición operativa del benchmark.
+  \[
+  \mathrm{Tasa\ de\ solicitudes\ fallidas}=\frac{\texttt{failures}}{\texttt{total\_requests\_measured}}.
+  \]
+  En todas las tablas operativas de este libro, esta métrica se interpreta como un indicador de estabilidad de la corrida de benchmark y no como una medida de desempeño predictivo.
+
+  \item \textbf{Latencias total, de extracción y de inferencia:}
+  cada request medida produce un tiempo total y, cuando corresponde, un desglose en extracción de features e inferencia. A partir de esos vectores se exportan media, desvío estándar y percentiles P50, P95 y P99.
+
+  \item \textbf{CPU aproximada:}
+  \[
+  \mathrm{CPU\ util\%}\approx 100\cdot\frac{\Delta(\texttt{user}+\texttt{system})}{\texttt{wall\_time\_seconds}}.
+  \]
+
+  \item \textbf{Memoria y tamaño de modelo:} se registran \texttt{rss\_mb\_before}, \texttt{rss\_mb\_after}, \texttt{peak\_rss\_mb\_approx} y \texttt{model\_size\_bytes}.
+\end{itemize}
+
+\subsubsection{Diccionario resumido de métricas retenidas}
+\footnotesize
+\begin{longtable}{@{}>{\RaggedRight\arraybackslash}p{3.2cm}>{\RaggedRight\arraybackslash}p{6.2cm}>{\RaggedRight\arraybackslash}p{4.1cm}@{}}
+\toprule
+\textbf{Métrica} & \textbf{Cálculo en la implementación} & \textbf{Uso principal} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Métrica} & \textbf{Cálculo en la implementación} & \textbf{Uso principal} \\
+\midrule
+\endhead
+Accuracy & Proporción de predicciones correctas: $\frac{1}{n}\sum_i \ind[\hat y_i=y_i]$. & Multiclase y casos reducidos a dos clases. \\
+Balanced accuracy & Promedio del recall por clase; en binario equivale a $(\mathrm{TPR}+\mathrm{TNR})/2$. & Detección binaria y \textit{one-class}, útil con desbalance. \\
+Precision & $TP/(TP+FP)$ en binario; en agregaciones micro/macro/weighted sigue el promedio definido por el script. & Calidad de predicciones positivas. \\
+Recall / TPR & $TP/(TP+FN)$. En binario coincide con la tasa de verdaderos positivos. & Capacidad de recuperación de ataques o clases reales. \\
+$F_1$ & Media armónica entre precision y recall. & Resumen sintético en detección binaria. \\
+$F_1$ macro & Promedio simple del $F_1$ por clase o etiqueta. & Multiclase y multietiqueta, sensible a clases minoritarias. \\
+$F_1$ weighted / micro & En multiclase se retiene $F_1$ ponderada por soporte; en multietiqueta se retiene $F_1$ micro, agregada globalmente. & Comparación global de modelos supervisados. \\
+MCC & Coeficiente de correlación de Matthews; en multiclase se usa la generalización de \texttt{matthews\_corrcoef}. & Resumen robusto con desbalance. \\
+Hamming loss & Fracción de decisiones etiqueta-por-request incorrectas. & Multietiqueta. \\
+Jaccard micro & Intersección sobre unión calculada globalmente sobre todas las etiquetas. & Multietiqueta. \\
+Exact match ratio & Proporción de requests cuya salida multilabel coincide exactamente con la verdad. & Multietiqueta. \\
+Tiempo de optimización & Tiempo total del bloque de búsqueda de hiperparámetros. & Tuning supervisado y \textit{one-class}. \\
+Tiempo de construcción & \texttt{train\_time\_seconds}, medido alrededor de \texttt{fit}. & Todos los modelos. \\
+Tiempo de aplicación & \texttt{wall\_time\_seconds} del benchmark operativo. & Todos los modelos. \\
+\bottomrule
+\end{longtable}
+\normalsize
+
+
+% ============================================================================
+% CAPÍTULO 4
+% ============================================================================
+\chapter{Estado del arte y trabajos relacionados}
+
+\section{SR-BH 2020: tráfico real de honeypot con etiquetas CAPEC}
+SR-BH 2020 fue recolectado en un servidor WordPress expuesto a Internet; su publicación y descripción técnica están disponibles
+en Harvard Dataverse (con DOI persistente) y en el artículo asociado \cite{srbh_dataverse,srbh_paper}. El dataset está alineado con un caso de uso WAF
+porque el registro se realiza a nivel de request HTTP \cite{owasp_waf,modsecurity_site}.
+
+\subsection{SR-BH 2020 como referencia de tráfico real}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Tráfico real}: reduce el riesgo de sobre-ajuste a patrones sintéticos y captura variabilidad de producción \cite{srbh_paper}.
+  \item \textbf{Etiquetas CAPEC (multietiqueta)}: permite ir más allá del binario y evaluar clasificación semántica por patrones \cite{srbh_paper,capec_about}.
+  \item \textbf{Pertinencia a WAF}: modela directamente campos inspeccionados por un WAF (método/URI/body) \cite{owasp_waf,modsecurity_site}.
+  \item \textbf{Reproducibilidad}: al estar publicado con DOI persistente en Harvard Dataverse, facilita citación, trazabilidad y replicación de experimentos \cite{srbh_dataverse}.
+\end{itemize}
+
+\section{Datasets alternativos y unificación a un esquema común}
+Además de SR-BH, se contemplan datasets alternativos para comparar desempeño y \textit{domain shift}:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{CSIC 2010}: útil para benchmarking, pero su tráfico es generado/sintético \cite{csic2010_impact}.
+  \item \textbf{TORPEDA (RECSI 2012)}: propone una especificación abierta de conjuntos de datos de ataques a aplicaciones web \cite{torpeda_2012}.
+\end{itemize}
+
+\subsection{Estrategia de unificación (implementación)}
+Para poder entrenar/evaluar con el mismo pipeline, CSIC y TorpEda se transforman a un esquema compatible con SR-BH:
+\begin{itemize}[leftmargin=*]
+  \item columnas: \texttt{request\_http\_method}, \texttt{request\_http\_request}, \texttt{request\_body}, y opcionalmente \texttt{request\_headers\_json}.
+  \item variables objetivo: \texttt{label\_binary}, \texttt{label\_multiclass}, \texttt{label\_multilabel}.
+\end{itemize}
+
+En todos los datasets, para el caso \textit{one-class} se trata todo lo no-normal como anomalía (tarea \textbf{binaria}). Para las tareas supervisadas, la granularidad depende del dataset: \textbf{CSIC~2010} provee únicamente \textit{normal/anómalo}, por lo que las configuraciones multiclase/multietiqueta se evalúan en su \textit{versión reducida} (binaria); \textbf{TorpEda~2012} preserva sus etiquetas \textit{multiclase} nativas (tipo de ataque) y además permite el colapso a binario cuando corresponda; \textbf{SR-BH~2020} habilita binario, multiclase (vía etiqueta CAPEC primaria) y multietiqueta CAPEC.
+
+\subsection{Comparativa de la tríada de datasets}
+El diseño experimental conserva los tres datasets porque cada uno aporta una pieza distinta de evidencia metodológica. \textbf{SR-BH~2020} se usa como referencia principal de \textbf{realismo}, ya que contiene tráfico real de honeypot y etiquetas CAPEC multietiqueta \cite{srbh_dataverse,srbh_paper}. \textbf{CSIC~2010} y \textbf{TorpEda~2012} se mantienen porque siguen siendo puntos de comparación frecuentes en detección de ataques web, ofrecen escenarios más controlados y permiten contrastar cuánto del rendimiento observado depende del dataset y cuánto del modelo \cite{csic2010_impact,csic2010_doc,torpeda_2012}. En otras palabras, la tríada se elige para cubrir simultáneamente \textbf{realismo}, \textbf{comparabilidad con la literatura} y \textbf{variación en granularidad de etiquetas}; quitar cualquiera de los tres debilitaría alguna de esas dimensiones.
+
+\subsection{Reducción multietiqueta a multiclase}
+En SR-BH una request puede tener múltiples etiquetas CAPEC. Para definir una tarea multiclase se colapsa la multietiqueta a una sola clase primaria, seleccionando la etiqueta con mayor severidad dentro del conjunto activo \cite{capec_schema_docs,capec_schema_desc}. Esta reducción es práctica para comparar modelos multiclase, pero implica pérdida de información y debe discutirse como amenaza a validez.
+
+% ============================================================================
+% CAPÍTULO 5
+% ============================================================================
+\chapter{Metodología propuesta}
+
+\section{Principio general}
+La elección de features busca capturar:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Estructura}: profundidad del path, cantidad de parámetros, longitudes.
+  \item \textbf{Codificación/anormalidad}: percent-encoding, proporción de caracteres no alfanuméricos.
+  \item \textbf{Indicadores de payload}: presencia (como feature) de tokens comúnmente asociados a familias de ataque.
+  \item \textbf{Método}: one-hot de métodos y bandera de método poco común.
+\end{itemize}
+En detección de anomalías web, atributos estadísticos y de estructura se han mostrado útiles para puntuar requests anómalos \cite{kruegel_vigna_2003}. Además, trabajos más recientes sobre detección de ataques web y selección de variables muestran que señales extraídas directamente del request HTTP pueden capturar conocimiento experto útil sin abandonar la trazabilidad del modelo \cite{riverol_2024,srbh_paper}. Por ello, se priorizan features \textbf{baratas de extraer}, compatibles con la inspección de un WAF y suficientemente interpretables para discutir después qué señales aportan rendimiento real y cuáles se acercan demasiado a firmas \cite{owasp_waf,modsecurity_site}.
+
+
+\section{Lista de features implementada}
+La representación utilizada por los modelos se obtiene directamente a partir de cuatro insumos del request: el método HTTP, la URI, los encabezados y el cuerpo. En la implementación, la extracción se realiza sobre cada petición en forma individual. Primero se normaliza el método a mayúsculas, luego se descompone la URI con \texttt{urlsplit} para separar \textit{path} y \textit{query}, se procesan los parámetros con \texttt{parse\_qsl}, se inspecciona la presencia de secuencias de \textit{percent-encoding} mediante una expresión regular y, finalmente, se revisan URI y body en minúsculas para contabilizar ocurrencias de tokens heurísticos. El resultado es un vector fijo de 25 variables numéricas y binarias.
+
+\subsection{Cómo se construye cada feature}
+
+\subsubsection{Features de longitud}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{uri\_len}}: representa la longitud total de la URI original. Se calcula como la cantidad de caracteres de la cadena completa recibida en \texttt{uri}. Si la URI está vacía, el valor es 0.
+
+  \item \textbf{\texttt{query\_len}}: representa la longitud del \textit{query string}. Después de separar la URI con \texttt{urlsplit}, se toma el componente \texttt{query} y se cuenta su cantidad de caracteres. Si la URI no tiene parámetros, el valor es 0.
+
+  \item \textbf{\texttt{body\_len}}: representa el tamaño del cuerpo del request en bytes. Se obtiene con \texttt{len(body)} cuando el cuerpo existe. Si el request no trae body, se asigna 0.
+
+  \item \textbf{\texttt{req\_content\_length}}: representa el tamaño declarado del cuerpo. Se intenta leer primero el encabezado \texttt{Content-Length} (aceptando tanto \texttt{content-length} como \texttt{Content-Length}) y convertirlo a entero. Si el encabezado no existe, no es numérico o es negativo, se usa 0. Además, cuando ese valor queda en 0 pero el body existe, la implementación lo reemplaza por \texttt{body\_len} para no perder completamente la señal de tamaño.
+\end{itemize}
+
+\subsubsection{Features de estructura}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{path\_depth}}: aproxima la profundidad del recurso solicitado. Tras separar la URI, se toma el componente \texttt{path} y se cuenta cuántas veces aparece el carácter \texttt{/}. No mide niveles semánticos perfectos, pero sí ofrece una señal consistente sobre cuán profunda o anidada es la ruta.
+
+  \item \textbf{\texttt{n\_query\_params}}: representa la cantidad de parámetros presentes en la query. Se calcula aplicando \texttt{parse\_qsl(query, keep\_blank\_values=True)} y contando cuántos pares clave--valor fueron extraídos. Esto permite contabilizar también parámetros con valor vacío.
+
+  \item \textbf{\texttt{max\_param\_value\_len}}: representa la mayor longitud observada entre los valores de los parámetros de la query. Una vez obtenidos los pares clave--valor, se calcula el máximo de \texttt{len(valor)}. Si no hay parámetros, el valor es 0.
+\end{itemize}
+
+\subsubsection{Features de composición de caracteres y codificación}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{uri\_pct\_non\_alnum\_ratio}}: mide la proporción de caracteres no alfanuméricos dentro de la URI completa. Para obtenerla, se recorre la URI carácter por carácter, se cuenta cuántos no satisfacen \texttt{isalnum()}, y luego se divide esa cantidad por \texttt{uri\_len}. Si la URI está vacía, el cociente se define como 0.
+
+  \item \textbf{\texttt{encoded}}: aproxima el grado de \textit{percent-encoding} en la URI. La implementación busca coincidencias del patrón \texttt{\%[0-9a-fA-F]\{2\}}. Cada coincidencia representa una secuencia de tres caracteres codificados, por lo que se multiplica la cantidad de coincidencias por 3 y se divide por \texttt{uri\_len}. El resultado es una razón entre 0 y 1 cuando la longitud es positiva.
+
+  \item \textbf{\texttt{body\_encoded}}: aplica la misma idea sobre el body. Si existe cuerpo, este se decodifica en UTF-8 ignorando errores; sobre ese texto se buscan las mismas secuencias de \textit{percent-encoding}. Luego se divide la longitud total ocupada por esas coincidencias entre la longitud del texto decodificado. Si no hay body, el valor es 0.
+\end{itemize}
+
+\subsubsection{Features heurísticas basadas en tokens sospechosos}
+En este estudio, los tokens sospechosos no se usan como reglas de bloqueo, sino como señales numéricas adicionales dentro de la representación. Se trata de una lista fija de cadenas elegida para capturar indicios frecuentes de traversal, \textit{cross-site scripting}, inyección SQL y manipulación de payloads. La lista implementada es la siguiente:
+
+\begin{verbatim}
+../, <script, onerror=, onload=, ', ", --, ;,
+ union ,  select , sleep(,  or 1=1, benchmark(, information_schema
+\end{verbatim}
+
+Antes de contarlos, la URI y el body se convierten a minúsculas. Luego, para cada token de la lista, la implementación aplica una búsqueda por ocurrencias usando \texttt{count()} sobre la cadena correspondiente. En el código, cada token se normaliza con \texttt{strip().lower()} antes de contar, con lo cual los espacios laterales definidos en la lista no forman parte de la coincidencia final. Eso hace que la señal sea simple y reproducible, aunque también más sensible a apariciones parciales dentro del texto.
+
+A partir de esa lista se construyen cuatro variables:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{suspicious\_tokens\_count}}: suma total de ocurrencias de todos los tokens heurísticos en la URI ya pasada a minúsculas.
+
+  \item \textbf{\texttt{has\_suspicious\_tokens}}: indicador binario derivado de la variable anterior. Toma valor 1 cuando \texttt{suspicious\_tokens\_count} es mayor que 0, y 0 en caso contrario.
+
+  \item \textbf{\texttt{body\_suspicious\_tokens\_count}}: suma total de ocurrencias de los mismos tokens, pero en el body decodificado y pasado a minúsculas. Si el request no tiene body, el valor es 0.
+
+  \item \textbf{\texttt{body\_has\_suspicious\_tokens}}: indicador binario derivado de \texttt{body\_suspicious\_tokens\_count}. Vale 1 cuando el conteo del body es mayor que 0, y 0 cuando no se detecta ninguna ocurrencia.
+\end{itemize}
+
+Estas variables se describen como heurísticas porque no provienen de un parser semántico ni de una taxonomía aprendida automáticamente. Son señales manuales, sencillas de calcular y cercanas a conocimiento experto del dominio web. Precisamente por eso, más adelante se consideran en forma crítica mediante ablaciones con y sin este grupo de variables.
+
+\subsubsection{Features del método HTTP}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{uncommon\_method}}: indica si el método observado cae fuera del conjunto más común \{\texttt{GET}, \texttt{POST}, \texttt{HEAD}\}. Después de convertir el método a mayúsculas, la variable toma valor 1 si pertenece a otro método distinto de esos tres; en caso contrario toma 0.
+
+  \item \textbf{\texttt{method\_GET}, \texttt{method\_POST}, \texttt{method\_HEAD}, \texttt{method\_PUT}, \texttt{method\_DELETE}, \texttt{method\_PATCH}, \texttt{method\_OPTIONS}, \texttt{method\_TRACE}, \texttt{method\_CONNECT}}: corresponden a una codificación one-hot del método HTTP. Cada una vale 1 únicamente cuando el método observado coincide exactamente con esa opción, y 0 en los demás casos.
+
+  \item \textbf{\texttt{method\_OTHER}}: complementa la codificación anterior. Vale 1 cuando el método no coincide con ninguno de los métodos conocidos contemplados por la implementación; si el método pertenece al conjunto conocido, esta variable vale 0.
+\end{itemize}
+
+\subsection{Lectura metodológica de estas variables}
+El conjunto completo combina señales estructurales, de tamaño, de codificación, de contenido superficial y de protocolo. Algunas de ellas buscan capturar desvíos estadísticos del request, mientras que otras aproximan indicios más cercanos a firmas. Mantener esa mezcla dentro de un esquema fijo permite comparar modelos sobre una misma representación y, al mismo tiempo, analizar luego qué parte del rendimiento proviene de rasgos generales del tráfico HTTP y qué parte depende de heurísticas léxicas explícitas.
+
+\section{Criterios de diseño de la representación}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Longitudes y estructura}: ataques suelen introducir payloads largos o patrones estructurales (query con muchos parámetros, paths profundos). Esto está alineado con enfoques basados en atributos del request para detección de anomalías y con trabajos de selección de features en tráfico web \cite{kruegel_vigna_2003,riverol_2024}.
+  \item \textbf{Percent-encoding y no-alfanuméricos}: evasión y ofuscación frecuentemente se apoyan en \textit{encoding} y caracteres especiales; modelarlos ayuda a capturar desviaciones que un WAF también inspecciona \cite{owasp_waf,modsecurity_site}.
+  \item \textbf{Tokens sospechosos como features (no como reglas)}: se usan como señales numéricas que pueden ayudar a modelos lineales/no lineales, pero deben discutirse críticamente porque se aproximan a firmas; por eso se justifican solo si luego se auditan con ablaciones \cite{kruegel_vigna_2003,riverol_2024}.
+  \item \textbf{One-hot de métodos}: el método HTTP condiciona la forma del request; modelarlo evita confundir variaciones legítimas del protocolo con anomalías y mantiene coherencia con campos efectivamente inspeccionados en entornos WAF \cite{owasp_waf,modsecurity_site}.
+  \item \textbf{\texttt{req\_content\_length}}: cuando está disponible, aporta una señal adicional de tamaño esperable del body con costo de extracción prácticamente nulo, útil para mantener compatibilidad entre datasets y enriquecer la descripción estructural del request \cite{srbh_paper,owasp_waf}.
+\end{itemize}
+
+% ============================================================================
+% CAPÍTULO 6
+% ============================================================================
+\chapter{Diseño experimental}
+
+\section{Tareas definidas}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Detección binaria}: \texttt{label\_binary} (0 normal, 1 ataque/anómalo).
+  \item \textbf{Multiclase}: \texttt{label\_multiclass}. En SR-BH: etiqueta CAPEC primaria derivada desde la multietiqueta con una política explícita; en TorpEda: clases nativas por tipo de ataque; en CSIC~2010 (sin taxonomía por tipo), se usa la versión reducida $K=2$ (normal vs anómalo).
+  \item \textbf{Multietiqueta}: \texttt{label\_multilabel}. Disponible plenamente en SR-BH (vector/lista de etiquetas CAPEC por request). Para ejecutar el baseline OvR sobre los tres datasets, se parametriza la salida según etiquetas disponibles: CSIC~2010 se restringe a binario y TorpEda se usa en modo multiclase o binario cuando corresponda.
+\end{itemize}
+
+\section{Matriz experimental (3 modelos $\times$ 3 datasets)}
+En términos operativos, el diseño experimental es una matriz completa: \textbf{cada familia de modelos se entrena y evalúa sobre cada uno de los tres datasets}, adaptando la granularidad de la tarea cuando el dataset no provee todas las etiquetas.
+
+\begin{table}[H]
+\centering
+\caption{Matriz experimental (modelo $\times$ dataset) y tarea evaluada.}
+\label{tab:matriz_experimental_libro}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}p{4.8cm}>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X>{\RaggedRight\arraybackslash}X@{}}
+\toprule
+\textbf{Modelo / configuración} & \textbf{CSIC~2010} & \textbf{TorpEda~2012} & \textbf{SR-BH~2020} \\
+\midrule
+\parbox[t]{\linewidth}{Detector one-class escalable\\(\texttt{SGDOneClassSVM} +\\aproximación de kernel)} &
+Binario (normal vs.\ anómalo) &
+Binario (normal vs.\ anómalo) &
+Binario (normal vs.\ anómalo) \\
+Regresión logística lineal &
+Binario (versión reducida) &
+Multiclase (tipo de ataque) &
+Multiclase (CAPEC primaria) \\
+OvR lineal &
+Binario (versión reducida) &
+Multiclase o binario, según etiqueta disponible &
+Multietiqueta (CAPEC) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Política general de particionado y reproducibilidad}
+La comparación entre modelos dentro de un mismo dataset debe hacerse sobre una \textbf{misma política de particionado}. Por ello, se adopta como protocolo principal un \textbf{particionado externo fijo 80/20} para los experimentos supervisados, con \textbf{semilla explícita y reproducible}. En esos casos, el \textbf{20\% externo} queda reservado exclusivamente para \textbf{prueba final}; no se reutiliza para ajuste de hiperparámetros, selección de variables, calibración de umbrales ni ajuste de transformaciones. En consecuencia, bajo este protocolo no hay contaminación entre entrenamiento y prueba: el conjunto de prueba externo permanece aislado hasta la evaluación final. Para el \textit{detector one-class}, la política específica es entrenar con el \textbf{80\% de instancias normales} y evaluar sobre un conjunto mixto compuesto por el \textbf{20\% de normales en holdout} y el \textbf{total de anomalías/ataques disponibles}.
+
+Como criterio adicional de trazabilidad:
+\begin{itemize}[leftmargin=*]
+  \item se registran las semillas, tamaños de partición y prevalencias de clases/etiquetas;
+  \item cualquier transformación (\texttt{StandardScaler}, \texttt{MultiLabelBinarizer}, codificación u otras) se ajusta únicamente con datos de entrenamiento;
+  \item cuando un dataset disponga de un \textit{split} canónico propio (por ejemplo, CSIC~2010), este podrá reportarse como \textbf{análisis secundario}, pero la comparación principal entre modelos/datasets se basará en el protocolo 80/20 unificado.
+\end{itemize}
+
+\section{Particionado por tarea}
+\subsection{Supervisado (multiclase y multietiqueta)}
+En los modelos supervisados, el \textbf{80\% de entrenamiento} se utiliza para ajuste y selección de hiperparámetros; el \textbf{20\% externo} se usa una única vez para evaluación final.
+
+\paragraph{Multiclase.}
+Se intentará \texttt{train\_test\_split} estratificado por clase. Si alguna clase tiene cardinalidad insuficiente para sostener la estratificación o la validación cruzada, se aplicará una política explícita de clases raras previa al \textit{split}: \texttt{keep}, \texttt{merge} (por ejemplo, a \texttt{OTHER\_RARE}) o \texttt{drop}. Si aun así la estratificación no fuera viable, se utilizará un \textit{split} no estratificado con semilla fija y se reportará la prevalencia final por clase.
+
+\paragraph{Multietiqueta.}
+Cuando sea técnicamente viable, se preferirá una estratificación aproximada que preserve la distribución conjunta de etiquetas. Si la esparsidad o las restricciones de implementación lo impiden, se utilizará como baseline un \textit{split} fijo no estratificado y se reportarán las prevalencias por etiqueta antes y después del particionado. Esa condición se documenta como limitación y se complementa con análisis por etiqueta para evitar lecturas engañosas.
+
+\subsection{Detector one-class sin contaminación}
+Para el detector one-class, la política debe respetar dos condiciones: (i) entrenar solo con tráfico normal y (ii) mantener un conjunto de prueba verdaderamente no visto. Por ello, la estrategia adoptada es la siguiente:
+\begin{enumerate}[leftmargin=*]
+  \item Se realiza un \textbf{particionado 80/20 únicamente sobre las instancias normales}. El \textbf{20\% de normales en holdout} se reserva para prueba final.
+  \item El modelo final se ajusta \emph{únicamente} con el \textbf{80\% de normales}. El \textbf{total de anomalías/ataques disponibles} se reserva para evaluación final y no participa del ajuste del modelo.
+  \item Si hay \textit{tuning}, se realiza \textbf{solo dentro del bloque de entrenamiento normal}: se separa una validación interna de normales desde el 80\% de normales y se seleccionan hiperparámetros con un criterio coherente con el escenario \textit{one-class} (por ejemplo, minimizar rechazo de tráfico normal o controlar una tasa objetivo de outliers), sin tocar el conjunto final de ataques.
+\end{enumerate}
+Con ello se elimina el principal riesgo metodológico de este tipo de detector: usar el mismo conjunto mixto tanto para escoger hiperparámetros como para reportar métricas finales, y además se aprovechan \textbf{todas las anomalías/ataques disponibles} en la evaluación final.
+
+\section{Modelos seleccionados}
+Se mantienen las tres familias metodológicas definidas para el estudio, con una implementación ajustada para conservar compatibilidad con datasets muy grandes. La lógica de selección no es ``usar el modelo más complejo disponible'', sino elegir un conjunto de referencias que permita responder las preguntas del estudio con \textbf{trazabilidad}, \textbf{comparabilidad} y \textbf{factibilidad computacional}. Modelos más complejos, incluyendo enfoques recientes basados en redes profundas, son útiles como contexto de literatura, pero no necesariamente como \textit{baseline} principal cuando el objetivo incluye interpretabilidad, evaluación cruzada entre datasets y ejecución sobre volúmenes del orden de $10^6$ peticiones \cite{fang_2024,zhou_2024}.
+
+\subsection{Detector one-class escalable}
+
+\subsubsection{Justificación del enfoque one-class}
+El uso de un detector \textit{one-class} se justifica en este trabajo por dos razones complementarias. En primer lugar, permite entrenar el modelo exclusivamente con tráfico normal y detectar como anómalas las peticiones que se desvían de ese soporte aprendido. Esto resulta útil cuando no se dispone de un catálogo completo de ataques etiquetados, situación frecuente en entornos reales donde los atacantes generan constantemente variantes nuevas. En segundo lugar, este enfoque mantiene coherencia con la motivación original de los WAF basados en anomalías: aprender qué aspecto tiene el tráfico legítimo y señalar desviaciones, sin depender de un inventario fijo de patrones maliciosos \cite{kruegel_vigna_2003}.
+
+\subsubsection{Justificación de la variante escalable}
+La formulación clásica del One-Class SVM \cite{scholkopf2001} resuelve un problema de optimización cuadrática cuyo costo crece de manera cuadrática o cúbica con el número de ejemplos, lo que lo hace impracticable para datasets del orden de $10^5$ a $10^6$ peticiones. Por este motivo se adopta una variante escalable basada en descenso de gradiente estocástico (SGD), que mantiene el mismo principio conceptual —aprender la frontera del soporte normal— pero con un costo de entrenamiento lineal en el número de ejemplos \cite{sklearn_sgd_ocsvm}. Para conservar la capacidad de capturar relaciones no lineales entre características, se agrega una aproximación de kernel mediante el método de Nyström \cite{williams2001,sklearn_kernel_approx}, que transforma explícitamente el espacio de características antes de aplicar el detector lineal.
+
+\subsubsection{Pipeline concreto adoptado}
+La implementación seleccionada para todas las corridas one-class del estudio es el siguiente pipeline en tres etapas:
+\[
+\texttt{StandardScaler} \;\rightarrow\; \texttt{Nystroem} \;\rightarrow\; \texttt{SGDOneClassSVM}.
+\]
+Sea $x \in \mathbb{R}^d$ el vector de características de una petición HTTP. La primera etapa escala cada característica a media cero y varianza unitaria. La segunda aplica una transformación explícita $z(x) \in \mathbb{R}^m$ mediante la aproximación de Nyström, que aproxima el mapa de características asociado a un kernel RBF. La tercera etapa aprende un hiperplano en ese espacio transformado que separa el tráfico normal del origen:
+\[
+f(x)=\operatorname{sign}\big(w^\top z(x)-\rho\big).
+\]
+Las peticiones con $f(x) < 0$ se clasifican como anómalas. Esta formulación preserva el supuesto central del enfoque ---entrenar solo con tráfico normal--- y mantiene el costo de entrenamiento e inferencia en un rango compatible con el tamaño de los datasets utilizados \cite{sklearn_sgd_ocsvm,sklearn_kernel_approx}.
+
+\subsection{Baseline supervisado: regresión logística lineal}
+Se adopta regresión logística lineal como \textit{baseline} supervisado principal, preferentemente con \texttt{solver=lbfgs} o configuración equivalente eficiente, por su interpretabilidad mediante coeficientes, su costo computacional controlado y su solidez como referencia supervisada en la literatura \cite{islr_logreg,sklearn_logreg}.
+
+\subsection{Baseline multietiqueta: One-vs-Rest}
+Para la formulación multietiqueta se utiliza \texttt{OneVsRestClassifier} sobre regresión logística lineal. OvR es una descomposición estándar y metodológicamente defendible cuando interesa conservar trazabilidad por etiqueta y mantener interpretabilidad de los coeficientes por clase \cite{tsoumakas_multilabel_overview,rifkin_ova,sklearn_logreg}.
+
+\section{Selección de hiperparámetros (Grid/Random Search) y validación}
+La metodología incorpora un módulo de \textit{tuning} para alinear el pipeline con buenas prácticas experimentales, pero lo redefine para que no domine el costo total de ejecución. La política general es: \textbf{toda selección se hace solo dentro del bloque de entrenamiento} y con un \textbf{presupuesto computacional fijo} \cite{sklearn_randomsearch,sklearn_halving}.
+
+\subsection{Tuning en supervisado (multiclase y multietiqueta)}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Bloque habilitado:} únicamente el \textbf{80\% de entrenamiento} del split externo.
+  \item \textbf{Estrategia recomendada:} \textit{random search} acotado o \textit{successive halving} sobre un subconjunto interno del entrenamiento, evitando \textit{grid search} exhaustivo como protocolo principal.
+  \item \textbf{Parámetros buscados:} principalmente \texttt{C}, penalización, \texttt{solver} y, cuando corresponda, \texttt{class\_weight}.
+  \item \textbf{Métrica de selección:} $F_1$ weighted en multiclase y $F_1$ micro en multietiqueta.
+  \item \textbf{Reentrenamiento final:} con la mejor configuración, el modelo se reentrena sobre todo el \textbf{80\% de entrenamiento} y se evalúa una única vez sobre el \textbf{20\% externo}.
+  \item \textbf{Registro:} se guardan los scores por candidato a CSV para trazabilidad.
+\end{itemize}
+
+\subsection{Tuning en el detector one-class}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Bloque habilitado:} solo normales del \textbf{80\% de entrenamiento}; el test final nunca se toca durante la selección.
+  \item \textbf{Estrategia recomendada:} búsqueda acotada sobre \texttt{n\_components}, \texttt{gamma}, regularización y número de épocas del backend escalable. 
+  \item \textbf{Métrica de selección:} una métrica basada en normales del \textit{holdout} interno (por ejemplo, tasa de aceptación de normales o tasa de rechazo falsa). Si se usa una variante con anomalías internas, debe declararse como análisis secundario y no como protocolo principal.
+  \item \textbf{Reentrenamiento final:} con la mejor configuración, el modelo se reentrena sobre todo el \textbf{80\% de normales} y se evalúa una única vez sobre el \textbf{20\% de normales en holdout} + \textbf{todas las anomalías/ataques disponibles}.
+  \item \textbf{Registro:} se guardan los scores por candidato a CSV para trazabilidad.
+\end{itemize}
+
+
+\section{Configuración experimental efectivamente utilizada}
+Las corridas incorporadas en los resultados finales siguen una parametrización homogénea por familia de modelos. La regularidad entre datasets no se utilizó solo como criterio de orden, sino como condición para sostener comparaciones transversales defendibles: cuando la tarea cambia, cambia la granularidad de la etiqueta; cuando la familia del modelo se mantiene, también se mantienen la lógica de particionado, el presupuesto de búsqueda y el bloque operativo de benchmark.
+
+\subsection{Construcción y preparación de los datasets}
+Los tres datasets se procesan sobre una representación común de características HTTP. En CSIC~2010 y CSIC/TorpEda~2012 se conserva el uso de información de cabeceras cuando está disponible, mientras que en SR-BH~2020 se mantiene el preprocesamiento compatible con separadores heterogéneos. El criterio adoptado es preservar un esquema de entrada comparable entre fuentes con distinto origen, sin introducir una definición distinta de características para cada dataset. De ese modo, las diferencias observadas en resultados quedan asociadas principalmente al realismo del tráfico, a la granularidad de las etiquetas y a la familia del modelo, y no a una representación de entrada completamente distinta.
+
+\subsection{Correspondencia entre representación y variables objetivo}
+
+\subsubsection{Vector de características}
+En la implementación, cada petición HTTP se representa como un vector fijo de 25 características numéricas ($d = 25$), construido a partir de cuatro campos del protocolo: método HTTP, URI, cuerpo (\textit{body}) y, cuando está disponible, un campo derivado de encabezados (\texttt{req\_content\_length}). Las características cubren longitudes, estructura de la URI, composición de caracteres, grado de \textit{percent-encoding}, indicadores heurísticos basados en tokens sospechosos y una codificación \textit{one-hot} del método. El detalle de cada característica se presenta en el capítulo de representación de peticiones HTTP.
+
+En el caso de SR-BH~2020, el dataset publicado originalmente incluye 24 características; en la versión adoptada para este estudio se recalcula el esquema completo y se agrega la característica \texttt{req\_content\_length} derivada de encabezados, unificando el conjunto en 25 para mantener comparabilidad con los demás datasets.
+
+\subsubsection{Variables objetivo}
+Las variables de salida utilizadas en los experimentos corresponden a tres formulaciones del problema, derivadas de la información de etiquetado disponible en cada dataset:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{label\_binary}:} variable binaria (0 = normal, 1 = ataque o anomalía). Disponible en los tres datasets.
+  \item \textbf{\texttt{label\_multiclass}:} variable con una única clase por petición. En TorpEda~2012 corresponde a las clases nativas por tipo de ataque. En SR-BH~2020 se deriva desde la anotación multietiqueta CAPEC mediante una política determinista basada en severidad: se selecciona como clase primaria la etiqueta CAPEC con mayor nivel de severidad entre las activas en esa petición; si no hay etiquetas activas, la instancia queda como \texttt{NORMAL}. Para trazabilidad, el dataset procesado conserva columnas auxiliares \texttt{label\_multiclass\_first} y \texttt{label\_primary\_severity}. En CSIC~2010, donde no existe taxonomía por tipo de ataque, esta variable queda reducida de hecho a un esquema binario.
+  \item \textbf{\texttt{label\_multilabel}:} vector binario de longitud $L$ (cantidad de etiquetas CAPEC posibles), donde cada componente indica si la petición activa esa etiqueta. Disponible plenamente en SR-BH~2020. En los demás datasets, la formulación multietiqueta se ejecuta en modo reducido según la granularidad efectivamente disponible.
+\end{itemize}
+
+\subsection{Detector one-class en CSIC~2010, CSIC/TorpEda~2012 y SR-BH~2020}
+La familia \textit{one-class} se ejecuta en los tres datasets como problema binario \textit{normal vs. anómalo}, manteniendo una misma estructura: escalado, aproximación de kernel mediante Nyström y detector \texttt{SGDOneClassSVM}. El particionado conserva \textbf{80/20} sobre tráfico normal, con \textbf{semilla 42}, de modo que el ajuste se realiza exclusivamente con normales y la evaluación final utiliza el \textit{holdout} de normales junto con el total de anomalías o ataques disponibles. La búsqueda de hiperparámetros se limita a un presupuesto aleatorio pequeño sobre cuatro ejes: fracción esperada de outliers, escala del kernel aproximado, dimensionalidad de la aproximación y número máximo de iteraciones.
+
+Esa configuración cumple dos propósitos. En primer lugar, preserva el supuesto metodológico central del enfoque \textit{one-class}: aprender la frontera del tráfico legítimo sin contaminar el entrenamiento con ataques. En segundo lugar, evita que el costo de explorar hiperparámetros vuelva impracticable una familia de modelos cuya principal justificación en el estudio es precisamente la escalabilidad. El bloque operativo también se mantiene uniforme, con un benchmark acotado y repetición mínima, suficiente para medir latencia, \textit{throughput}, memoria y estabilidad sin convertir la evaluación operativa en una prueba de carga ajena al alcance definido.
+
+Además, en los tres datasets se ejecutan dos variantes: una base y otra sin variables de tokens sospechosos. La ablación mantiene intacto el resto del pipeline. Esa simetría permite interpretar cualquier diferencia de rendimiento como efecto del grupo de variables removido y no como efecto colateral de otra modificación simultánea.
+
+\subsection{Regresión logística multiclase en CSIC~2010, CSIC/TorpEda~2012 y SR-BH~2020}
+La familia multiclase se ejecuta con regresión logística lineal, \texttt{solver=lbfgs}, penalización \texttt{l2}, regularización inicial \texttt{C=1.0}, ponderación de clases \texttt{balanced}, máximo de 500 iteraciones y política explícita de clases raras basada en \texttt{keep} con mínimo de dos instancias. Sobre esa base fija, la búsqueda de hiperparámetros se restringe a una validación cruzada de tres particiones, presupuesto aleatorio 2 y una muestra interna acotada, explorando únicamente dos valores de regularización y dos alternativas de ponderación de clases.
+
+La justificación de esta configuración no reside en exhaustividad, sino en estabilidad. \texttt{lbfgs} con \texttt{l2} conserva una línea base lineal robusta, con convergencia previsible y lectura posterior por coeficientes. La exploración se concentra en regularización y ponderación de clases porque, dentro de una familia lineal de baja complejidad, esos son los dos ejes con mayor impacto práctico bajo desbalance. Fijar el optimizador y la penalización reduce el espacio de búsqueda, disminuye ruido experimental y hace más clara la comparación entre datasets.
+
+En SR-BH~2020 la tarea multiclase se apoya en la etiqueta CAPEC primaria derivada desde la anotación multietiqueta. En CSIC/TorpEda~2012 se conserva la taxonomía nativa por tipo de ataque. En CSIC~2010 la misma tubería se mantiene, pero la salida queda reducida de hecho a un problema binario, ya que el dataset no aporta una taxonomía multiclase rica. Esa configuración no contradice la matriz experimental: muestra, por el contrario, qué ocurre cuando una misma familia supervisada se aplica a datasets con distinta granularidad semántica.
+
+También aquí se conservan dos variantes, base y sin tokens sospechosos, bajo el mismo particionado externo, el mismo presupuesto de \textit{tuning} y el mismo benchmark operativo. Esa regularidad refuerza la trazabilidad del contraste.
+
+\subsection{OvR lineal para multietiqueta y modos reducidos por dataset}
+La familia multietiqueta se ejecuta mediante una descomposición \textit{One-vs-Rest} sobre regresión logística lineal con \texttt{solver=lbfgs}, penalización \texttt{l2}, \texttt{class\_weight=balanced}, máximo de 300 iteraciones, tolerancia \texttt{1e-3} y paralelismo habilitado en el entrenamiento de las salidas. La búsqueda de hiperparámetros mantiene el mismo criterio acotado que en multiclase: validación cruzada interna, presupuesto 2, muestra interna limitada y exploración restringida a regularización y ponderación de clases.
+
+La formulación plena multietiqueta se conserva en SR-BH~2020, que sí ofrece etiquetas CAPEC simultáneas por request. En CSIC~2010 se fuerza un modo binario reducido, porque el dataset no dispone de una salida multietiqueta real. En CSIC/TorpEda~2012 se utiliza un modo reducido automático, que adapta la salida a la granularidad efectivamente disponible. El esquema conserva una única familia de script y de evaluación para los tres datasets, pero sin atribuir una riqueza semántica que dos de ellos no poseen. De esa manera, la comparación conserva continuidad operacional sin introducir etiquetas artificiales.
+
+La ablación de tokens sospechosos en esta familia se ejecuta dentro del mismo flujo del modelo y se registra como comparación específica entre variante base y variante ablacionada. El procedimiento evita duplicar lógica de entrenamiento y mantiene alineadas las métricas exportadas para ambas variantes. En el bloque operativo, el benchmark utiliza una ventana algo más amplia de calentamiento que en multiclase, porque la descomposición por etiqueta introduce un costo superior de inferencia y de carga en memoria.
+
+\subsection{Lectura metodológica conjunta}
+En conjunto, la forma de ejecución de cada familia responde a un mismo criterio: \textbf{máxima comparabilidad con complejidad controlada}. El detector \textit{one-class} conserva su supuesto de entrenamiento exclusivo con normales; la regresión logística multiclase mantiene una línea base lineal estable y fácilmente interpretable; y la formulación OvR multietiqueta preserva trazabilidad por etiqueta sin introducir arquitecturas más pesadas que desplacen la discusión central. Los presupuestos de \textit{tuning} son pequeños en los tres casos, no porque la optimización carezca de valor, sino porque la prioridad metodológica del estudio consiste en sostener una matriz experimental reproducible, coherente con el hardware disponible y suficiente para responder las preguntas de comparación planteadas.
+
+\section{Métricas (efectividad y eficiencia)}
+Dado que uno de los objetivos es comparar con trabajos relacionados, se selecciona un conjunto de métricas recurrente en la literatura sobre detección y clasificación de ataques web. El criterio de selección de métricas parte de que \textbf{accuracy por sí sola no alcanza} en presencia de desbalance, clases raras y tareas distintas (binaria, multiclase y multietiqueta). Por eso se combinan métricas de rendimiento, métricas sensibles al tipo de error y métricas operativas de costo temporal \cite{saito_pr_auc,chicco_mcc,srbh_paper,tsoumakas_multilabel_overview}.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Binario (normal vs ataque/anómalo):} matriz de confusión, Accuracy, Balanced Accuracy, Precision, Recall/TPR, F1, Specificity/TNR, FPR/FNR, MCC, ROC-AUC y PR-AUC. PR-AUC se incluye porque es más informativa que ROC-AUC cuando la clase positiva es minoritaria \cite{saito_pr_auc}.
+  \item \textbf{Multiclase:} Accuracy, Balanced Accuracy, Precision/Recall/$F_1$ en agregación micro, macro y \textit{weighted}, además de MCC, matriz de confusión y métricas por clase. Se reportan varias agregaciones para no ocultar el comportamiento sobre clases raras detrás de un único promedio \cite{tsoumakas_multilabel_overview,zhou_2024}.
+  \item \textbf{Multietiqueta (CAPEC):} Hamming Loss, Jaccard Similarity (micro, macro y, cuando el script lo habilita, por muestra), Exact Match Ratio, Precision/Recall/$F_1$ micro y macro, y AUC micro/macro cuando se dispone de scores continuos. Estas métricas cubren error por etiqueta, solapamiento entre conjuntos y coincidencia exacta de la predicción multilabel \cite{srbh_paper,tsoumakas_multilabel_overview}.
+  \item \textbf{Robustez al desbalance:} MCC como métrica complementaria a accuracy/F1, ya que resume de forma más equilibrada las cuatro celdas de la matriz de confusión \cite{chicco_mcc}.
+  \item \textbf{Costo temporal del protocolo:} se reportan explícitamente el \textbf{tiempo de optimización de parámetros}, el \textbf{tiempo de construcción del modelo} y el \textbf{tiempo de aplicación del modelo}. El primero corresponde al tiempo total del bloque de búsqueda de hiperparámetros; el segundo, al tiempo medido alrededor de \texttt{fit} y exportado como \texttt{train\_time\_seconds}; y el tercero, al tiempo total del benchmark operativo, exportado como \texttt{wall\_time\_seconds} y complementado con latencias por request.
+  \item \textbf{Eficiencia/tiempo real:} latencia media y percentiles P50/P95/P99 del pipeline (extracción de features + inferencia), throughput (req/s), tasa de fallos, CPU/RAM, tamaño del modelo y desagregación entre extracción e inferencia. Estas métricas se incluyen porque la evaluación no solo considera efectividad, sino también viabilidad operativa en un entorno tipo WAF \cite{ocswaf_zenodo}.
+\end{itemize}
+
+El detalle formal de cada métrica y de su cálculo exacto se encuentra en la sección de fundamentos matemáticos del Marco teórico.
+
+\section{Criterios de comparación con la literatura}
+Comparar resultados entre papers puede ser engañoso si difieren \textit{splits}, preprocesamiento o definición de etiquetas. Para maximizar comparabilidad:
+\begin{itemize}[leftmargin=*]
+  \item se reporta el \textbf{mismo conjunto de métricas} usado con frecuencia en la literatura;
+  \item cuando un paper usa el mismo dataset y tarea, se replica la tarea y se reportan métricas homólogas;
+  \item cuando un paper usa una configuración distinta, se compara solo a nivel de \textbf{métrica comparable} y se documenta explícitamente la amenaza a validez.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Métricas reportadas en trabajos relacionados y su correspondencia con el estudio.}
+\label{tab:metricas_relacionadas}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{@{}L{3.6cm}Y@{}}
+\toprule
+\textbf{Trabajo} & \textbf{Métricas típicas reportadas} \\
+\midrule
+WAF basado en detección de anomalías & TPR/FPR, F1 y medición de overhead en tiempo de respuesta (ms) \cite{ocswaf_zenodo}. \\
+SR-BH (paper del dataset) & Multietiqueta: Hamming Loss, Jaccard, EMR, F1 y AUC \cite{srbh_paper}. \\
+Selección de features en web attacks (Riverol 2024) & Accuracy, TPR, FPR y AUC/ROC (curvas ROC) \cite{riverol_2024}. \\
+Modelos recientes con énfasis en IDS (Fang 2024) & Accuracy, Precision, Recall, F1, FPR/FNR y MCC \cite{fang_2024,chicco_mcc}. \\
+Ensamble/Deep Kernel Learning (Zhou 2024) & Accuracy, macro Precision/Recall/F1 y weighted Precision/F1 (desbalance) \cite{zhou_2024}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\section{Importancia de características (FI)}
+Esta sección se incluye porque la comparación no se limita a contrastar métricas finales entre modelos. El diseño experimental también requiere examinar el aporte relativo de los grupos de características utilizados y discutir hasta qué punto el rendimiento observado proviene de señales estructurales del request HTTP o de indicadores léxicos más cercanos a firmas. Por esa razón, además de medir desempeño, el protocolo incorpora un bloque específico para analizar \textbf{qué variables empujan la decisión del modelo} y \textbf{qué significado metodológico tiene ese aporte}.
+
+En este contexto, \textbf{interpretabilidad} se entiende como la posibilidad de relacionar el comportamiento del modelo con variables concretas de entrada. En modelos lineales, esto significa poder revisar qué features reciben mayor peso y en qué dirección contribuyen a la predicción. \textbf{Explicabilidad}, en un sentido más amplio, refiere a la capacidad de justificar por qué un modelo rinde como rinde y qué tipo de señal está aprovechando. Aunque ambos términos suelen usarse juntos, aquí conviene distinguirlos: la interpretabilidad apunta a leer el modelo; la explicabilidad apunta a sostener una discusión metodológica sobre sus decisiones y sus límites.
+
+La sigla \textbf{FI} (\textit{Feature Importance}) se usa como nombre corto para el análisis de importancia de variables. Aquí no se plantea como una etapa separada y costosa, sino como una lectura complementaria del mismo protocolo experimental. La idea no es construir un ranking absoluto y definitivo de variables, sino observar si ciertos grupos ---por ejemplo, longitudes, estructura de URI, método HTTP o tokens sospechosos--- sostienen una parte importante del rendimiento.
+
+La estrategia adoptada tiene tres niveles:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Coeficientes estandarizados} (LR/OvR): como los modelos supervisados son lineales y se entrenan sobre variables escaladas, la magnitud de los coeficientes permite comparar de forma razonable el peso relativo de cada feature. En multiclase, la lectura se hace por clase; en multietiqueta, por etiqueta.
+  \item \textbf{Ablaciones por grupos}: se comparan corridas del pipeline completo contra variantes en las que se elimina un grupo entero de variables. Esto permite discutir el aporte del grupo como bloque y no solo de features aisladas.
+  \item \textbf{Ablación focal con y sin tokens sospechosos}: se reserva una comparación específica para ese grupo porque es el más delicado metodológicamente. Si gran parte del rendimiento dependiera de esas variables, la representación quedaría más cerca de una lógica de firma que de una descripción general del tráfico HTTP.
+\end{itemize}
+
+La sección está, entonces, para sostener una pregunta central del estudio: no solo cuál modelo rinde mejor, sino también \textbf{por qué} rinde mejor y \textbf{sobre qué tipo de señal} lo hace. Esa discusión resulta importante para interpretar resultados, comparar con la literatura y valorar la factibilidad de usar la representación adoptada en un contexto tipo WAF sin convertir el pipeline en un conjunto encubierto de reglas manuales.
+
+\section{Amenazas a la validez}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Desbalance}: etiquetas CAPEC pueden ser raras; afecta F1 macro, estratificación y estabilidad del entrenamiento.
+  \item \textbf{Reducción multilabel$\rightarrow$multiclase}: seleccionar una única etiqueta primaria simplifica la tarea, pero colapsa información multietiqueta \cite{capec_schema_docs,capec_schema_desc,owasp_risk_rating}.
+  \item \textbf{Evaluación one-class}: si el conjunto mixto de prueba se reutiliza para tuning, las métricas se inflan; por eso el protocolo separa la validación interna basada en normales del conjunto final de prueba compuesto por holdout de normales y todas las anomalías/ataques disponibles.
+  \item \textbf{Heurísticas de tokens}: pueden sesgar los modelos hacia firmas; por eso se exige la ablación correspondiente.
+  \item \textbf{Domain shift}: datasets sintéticos/curados (CSIC/TorpEda) pueden no transferir a tráfico real (SR-BH).
+  \item \textbf{Validez externa}: aun en SR-BH, el tráfico proviene de un honeypot específico y no de todas las configuraciones de producción posibles.
+\end{itemize}
+
+\chapter{Implementación (pipeline)}
+
+\section{Arquitectura del pipeline}
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, align=center, minimum width=3.8cm, minimum height=1.0cm},
+  arrow/.style={-Latex, thick},
+  small/.style={font=\small}
+]
+\node[block] (raw) {Datasets crudos\\SR-BH / CSIC / TorpEda};
+\node[block, right=1.2cm of raw] (prep) {Parsing HTTP\\método/URI/body};
+\node[block, right=1.2cm of prep] (feat) {Extracción\\25 features};
+\node[block, right=1.2cm of feat] (ds) {Dataset final\\(parquet/csv)};
+
+\node[block, below=1.2cm of ds] (train1) {Entrenamiento\\one-class escalable};
+\node[block, below=1.2cm of feat] (train2) {Entrenamiento\\supervisado lineal};
+\node[block, below=1.2cm of raw] (eval) {Evaluación\\métricas + FI};
+
+\draw[arrow] (raw) -- (prep);
+\draw[arrow] (prep) -- (feat);
+\draw[arrow] (feat) -- (ds);
+\draw[arrow] (ds) -- (train1);
+\draw[arrow] (ds) -- (train2);
+\draw[arrow] (train1) -- (eval);
+\draw[arrow] (train2) -- (eval);
+
+\node[font=\scriptsize, align=center, anchor=south, yshift=4mm, fill=white, inner sep=1pt]
+  at (raw.north) {srbh\_loader\\csic\_loader\\torpeda\_loader};
+
+\node[font=\scriptsize, anchor=south, yshift=4mm, fill=white, inner sep=1pt]
+  at (feat.north) {http\_features.py};
+
+\node[small] at ($(raw)+(0,-1.35)$) {build\_features*.py};
+\node[small] at ($(train1)+(0,-0.95)$) {train\_oneclass.py};
+\node[small] at ($(train2)+(0,-0.95)$) {train\_supervised.py};
+\end{tikzpicture}%
+}
+\caption{Pipeline propuesto: unificación de datasets, extracción de features, entrenamiento escalable, tuning con presupuesto fijo y evaluación.}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Artefactos generados}
+
+% Completar.
+
+\section{Derivación de \texttt{label\_multiclass} a partir de CAPEC (SR-BH)}
+En SR-BH, una misma request puede activar varias etiquetas CAPEC al mismo tiempo. Esa es precisamente la razón por la que el dataset resulta valioso para estudiar una formulación multietiqueta. Sin embargo, para poder compararlo con tareas multiclase sobre un mismo pipeline, la implementación también necesita una única etiqueta principal por instancia.
+
+La reducción a multiclase se resuelve mediante una regla determinista basada en severidad. Primero se construye \texttt{label\_multilabel} como la lista de etiquetas CAPEC activas en cada fila. Luego, cuando la estrategia seleccionada es \texttt{severity}, se elige como \texttt{label\_multiclass} la etiqueta con mayor severidad según el mapa definido en el loader. Si no hay etiquetas activas, la instancia queda como \texttt{NORMAL}. Esta decisión no elimina la salida multietiqueta original: ambas conviven para que la comparación entre formulaciones no obligue a perder información semántica.
+
+La implementación conserva además una columna auxiliar \texttt{label\_multiclass\_first}, útil para auditoría, y una columna \texttt{label\_primary\_severity} que deja trazado el puntaje de severidad asociado a la etiqueta elegida. De esta manera, la reducción a multiclase no queda como una operación opaca, sino como una transformación explícita y revisable dentro del mismo dataset procesado.
+
+Desde el punto de vista metodológico, esta política se usa solo para habilitar una tarea adicional de comparación. La salida multietiqueta sigue siendo la representación más fiel del fenómeno cuando una misma request participa de más de un patrón CAPEC. Por eso, en la discusión de resultados, la lectura multiclase se interpreta como una simplificación útil para contraste experimental, no como sustituto de la anotación original.
+
+
+\chapter{Resultados y discusión}
+
+\section{Criterio de presentación}
+El capítulo de resultados adopta una organización estrictamente tabular por tarea, dataset y variante de modelo. La decisión responde a dos necesidades simultáneas. Por un lado, resulta necesario comparar enfoques \textit{one-class}, multiclase y multietiqueta sobre CSIC 2010, CSIC/TorpEda 2012 y SR-BH 2020, con métricas adecuadas a cada formulación y con una discusión explícita de factibilidad tipo WAF. Por otro lado, el propio protocolo metodológico del estudio establece que la comparación debe mantener separados entrenamiento, ajuste y prueba, y que además del rendimiento predictivo deben informarse tiempos, latencias, \textit{throughput}, consumo de recursos y tamaño del modelo.\
+
+Para preservar comparabilidad entre artefactos heterogéneos, este capítulo distingue dos familias de tablas. Las primeras reúnen las métricas de efectividad reportadas por cada corrida. Las segundas reúnen las métricas operativas. En los bloques operativos, el tiempo de aplicación $t_{apply}^{\dagger}$ se expresa como el tiempo aproximado del lote principal de benchmark, calculado como \emph{solicitudes medidas / throughput global}; esta definición permite homogeneizar artefactos que no siempre exportan el mismo nombre de campo para el tiempo de pared del benchmark, pero sí informan de manera estable el volumen medido y el \textit{throughput}.\
+
+\section{Lectura metodológica de las corridas}
+Las corridas incorporadas en este libro siguen una lógica metodológica común: una representación compartida de peticiones HTTP, tres datasets con distinta granularidad de etiquetado y modelos compatibles con cada formulación del problema. CSIC 2010 se conserva como referencia controlada, útil para contrastar normalidad frente a tráfico anómalo y para observar qué ocurre cuando una tarea declarada como multiclase o multietiqueta se reduce en la práctica a un problema mucho más simple. CSIC/TorpEda 2012 aporta tipologías explícitas de ataque y un escenario genuinamente multiclase. SR-BH 2020, derivado de tráfico real de \textit{honeypot}, conserva el valor central de aportar mayor realismo y una semántica CAPEC más rica que la de los datasets puramente sintéticos o de laboratorio \cite{srbh_dataverse,srbh_paper,csic2010_impact,csic2010_doc,torpeda_2012}.\
+
+La selección de modelos también sigue esa lógica de adecuación a la tarea y de costo computacional defendible. Para detección binaria de anomalías se utilizó un esquema \texttt{StandardScaler + Nystroem + SGDOneClassSVM}, porque permite aproximar una frontera no lineal de normalidad con costo mucho menor que el de un kernel exacto, manteniendo el supuesto central de entrenar solo con tráfico legítimo \cite{scholkopf2001,williams2001,sklearn_sgd_ocsvm,sklearn_kernel_approx}. Para multiclase y multietiqueta se adoptó regresión logística lineal, y en el caso multietiqueta se la desplegó en esquema One-vs-Rest. La elección es coherente con los objetivos del estudio: interpretabilidad, trazabilidad, bajo costo de inferencia y una línea base suficientemente fuerte para comparar formulaciones sin que la complejidad del modelo eclipse la discusión experimental \cite{islr_logreg,sklearn_logreg,rifkin_ova,tsoumakas_multilabel_overview}.\
+
+El ajuste de hiperparámetros se mantuvo acotado. En los modelos supervisados se usó búsqueda aleatoria con presupuestos muy pequeños y validación cruzada interna, mientras que en el detector one-class se restringió la exploración a parámetros que controlan la forma de la frontera, la aproximación del kernel y la convergencia. No se presenta una optimización exhaustiva, sino una sintonización ligera y reproducible, suficiente para evitar configuraciones arbitrarias sin convertir el tuning en el costo dominante del protocolo \cite{bergstra2012,sklearn_randomsearch}.\
+
+La ablación de variables basadas en \textit{suspicious tokens} se mantuvo en los tres bloques porque cumple una función metodológica importante: separar el aporte de señales estructurales y de codificación de aquellas señales que se aproximan más a firmas léxicas explícitas. Cuando la ablación apenas modifica los resultados, puede sostenerse que el modelo depende poco de esos atajos. Cuando la ablación degrada fuertemente el rendimiento, la interpretación correcta no es que el modelo sea ``malo, sino que parte de su capacidad discriminativa descansa efectivamente en conocimiento léxico de dominio, algo que conviene declarar para no sobredimensionar la supuesta neutralidad de la representación.\
+
+\section{Detección one-class}
+\subsection{Métricas de efectividad}
+\begin{table}[H]
+\centering
+\caption{Resultados de detección one-class por dataset y variante.}
+\label{tab:res-one-eff}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llccccccccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & \textbf{Acc.} & \textbf{Bal. Acc.} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} & \textbf{MCC} & \textbf{TNR} & \textbf{FPR} & \textbf{FNR} & \textbf{ROC AUC} & \textbf{PR AUC} \\
+\midrule
+CSIC 2010 & Base & 0.6951 & 0.7512 & 0.9581 & 0.5437 & 0.6938 & 0.5037 & 0.9586 & 0.0414 & 0.4563 & 0.7688 & 0.8801 \\CSIC 2010 & Sin tokens & 0.7013 & 0.7631 & 0.9916 & 0.5341 & 0.6943 & 0.5340 & 0.9922 & 0.0078 & 0.4659 & 0.7630 & 0.8762 \\SR-BH 2020 & Base & 0.3175 & 0.5617 & 0.9813 & 0.1327 & 0.2338 & 0.1648 & 0.9908 & 0.0092 & 0.8673 & 0.5158 & 0.8547 \\SR-BH 2020 & Sin tokens & 0.3124 & 0.5585 & 0.9804 & 0.1261 & 0.2235 & 0.1596 & 0.9908 & 0.0092 & 0.8739 & 0.4736 & 0.8276 \\CSIC/TorpEda 2012 & Base & 0.7440 & 0.8615 & 0.9995 & 0.7379 & 0.8490 & 0.2504 & 0.9851 & 0.0149 & 0.2621 & 0.8358 & 0.9954 \\CSIC/TorpEda 2012 & Sin tokens & 0.7369 & 0.7661 & 0.9930 & 0.7354 & 0.8450 & 0.1848 & 0.7968 & 0.2032 & 0.2646 & 0.8215 & 0.9949 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\subsection{Métricas operativas}
+\begin{table}[H]
+\centering
+\caption{Indicadores operativos de las corridas one-class.}
+\label{tab:res-one-op}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llcccccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & $t_{opt}$ (s) & $t_{build}$ (s) & $t_{apply}^{\dagger}$ (s) & \textbf{Thr.} & \textbf{P95} (ms) & \textbf{CPU} (\%) & \textbf{Peak RSS} (MB) & \textbf{Modelo} (KiB) \\
+\midrule
+CSIC 2010 & Base & 4.120 & 1.071 & 2.076 & 192.708 & 9.916 & 130.56 & 873.45 & 569.5 \\CSIC 2010 & Sin tokens & 4.264 & 1.161 & 2.429 & 164.639 & 10.697 & 144.47 & 861.43 & 561.2 \\SR-BH 2020 & Base & 3.859 & 5.270 & 1.629 & 245.480 & 6.032 & 123.97 & 5448.73 & 569.5 \\SR-BH 2020 & Sin tokens & 5.142 & 6.797 & 1.648 & 242.650 & 5.458 & 124.36 & 5429.17 & 561.2 \\CSIC/TorpEda 2012 & Base & 1.330 & 0.380 & 1.611 & 248.260 & 5.135 & 146.47 & 942.27 & 569.5 \\CSIC/TorpEda 2012 & Sin tokens & 1.238 & 0.249 & 1.469 & 272.250 & 4.518 & 159.26 & 902.93 & 561.2 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+En conjunto, las corridas one-class muestran un patrón estable. La variante base conserva la mejor lectura global en Harvard y en TorpEda, especialmente por su mejor \textit{balanced accuracy}, MCC y control del error sobre la clase normal. En CSIC 2010, en cambio, la ablación mejora levemente Accuracy, Balanced Accuracy y MCC, aunque lo hace a costa de una caída pequeña en ROC AUC y PR AUC. Estos resultados indican que el bloque one-class se beneficia de una representación no lineal suficientemente rica como para no depender de manera uniforme de los tokens sospechosos.\
+
+Operativamente, el costo de entrenamiento final del detector es bajo en los tres datasets, pero el costo de memoria no lo es. Harvard es, con mucha diferencia, el caso más exigente: supera los 5.4 GB de pico de RSS en ambas variantes y, aunque mantiene \textit{throughput} alto, lo hace con una huella de memoria muy superior al resto. TorpEda ofrece la mejor combinación entre discriminación y costo. CSIC queda en una posición intermedia, con resultados predictivos razonables y tiempos compatibles con una discusión de viabilidad, aunque sin la solidez de TorpEda en separación binaria.
+
+\section{Clasificación multiclase}
+\subsection{Métricas de efectividad}
+\begin{table}[H]
+\centering
+\caption{Resultados multiclase por dataset y variante. En CSIC 2010 las AUC corresponden a la formulación binaria efectiva observada en prueba; en Harvard y TorpEda corresponden a la lectura OvR ponderada reportada por los artefactos.}
+\label{tab:res-mc-eff}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llccccccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & \textbf{Acc.} & \textbf{Bal. Acc.} & \textbf{F1 macro} & \textbf{F1 weighted} & \textbf{Prec. macro} & \textbf{Recall macro} & \textbf{MCC} & \textbf{ROC AUC} & \textbf{PR AUC} \\
+\midrule
+CSIC 2010 & Base & 0.8286 & 0.6989 & 0.7291 & 0.8085 & 0.8248 & 0.6989 & 0.5084 & 0.8430 & 0.9229 \\CSIC 2010 & Sin tokens & 0.8294 & 0.7011 & 0.7313 & 0.8098 & 0.8249 & 0.7011 & 0.5112 & 0.8439 & 0.9226 \\SR-BH 2020 & Base & 0.8014 & 0.5039 & 0.5252 & 0.7854 & 0.6240 & 0.5039 & 0.6450 & 0.9363 & 0.8631 \\SR-BH 2020 & Sin tokens & 0.7173 & 0.3426 & 0.3837 & 0.6882 & 0.5388 & 0.3426 & 0.4875 & 0.8958 & 0.8003 \\CSIC/TorpEda 2012 & Base & 0.8408 & 0.2916 & 0.3011 & 0.8092 & 0.5303 & 0.2916 & 0.7384 & 0.9675 & 0.8499 \\CSIC/TorpEda 2012 & Sin tokens & 0.8136 & 0.2556 & 0.2531 & 0.7747 & 0.3251 & 0.2556 & 0.6900 & 0.9569 & 0.8114 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\subsection{Métricas operativas}
+\begin{table}[H]
+\centering
+\caption{Indicadores operativos de las corridas multiclase.}
+\label{tab:res-mc-op}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llcccccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & $t_{opt}$ (s) & $t_{build}$ (s) & $t_{apply}^{\dagger}$ (s) & \textbf{Thr.} & \textbf{P95} (ms) & \textbf{CPU} (\%) & \textbf{Peak RSS} (MB) & \textbf{Modelo} (KiB) \\
+\midrule
+CSIC 2010 & Base & 2.4525 & 1.0872 & 1.5929 & 376.6683 & 3.2893 & 114.26 & 479.48 & 3.42 \\CSIC 2010 & Sin tokens & 2.3335 & 1.0055 & 1.4508 & 413.5759 & 2.6209 & 118.56 & 467.23 & 3.08 \\SR-BH 2020 & Base & 10.0885 & 137.3066 & 1.5420 & 388.8543 & 2.9597 & 119.90 & 2380.93 & 6.87 \\SR-BH 2020 & Sin tokens & 9.5461 & 144.5713 & 1.5916 & 376.9847 & 3.1997 & 118.12 & 2269.09 & 6.12 \\CSIC/TorpEda 2012 & Base & 3.8222 & 14.6148 & 1.4965 & 400.9321 & 2.8933 & 118.28 & 478.72 & 5.51 \\CSIC/TorpEda 2012 & Sin tokens & 3.7528 & 12.0153 & 1.5008 & 399.7902 & 2.8655 & 116.61 & 472.93 & 4.88 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Las tres corridas multiclase dejan una señal metodológica nítida: el efecto de la ablación depende fuertemente del dataset. En CSIC 2010, donde la prueba termina comportándose como una discriminación de dos etiquetas efectivas, la diferencia entre variantes es mínima y la versión sin tokens obtiene una mejora marginal en Accuracy, Balanced Accuracy, F1 macro y MCC. En Harvard la situación es la opuesta: la ablación degrada todas las métricas globales de manera marcada, lo que sugiere que las señales léxicas aportan información importante para separar varias tipologías de ataque sobre un espacio de clases amplio y heterogéneo. En TorpEda el resultado también favorece al modelo base, sobre todo en macro F1, MCC y AUC.\
+
+La lectura por clases, analizada en los artefactos específicos de cada corrida, muestra además que la degradación no se distribuye de forma pareja. En Harvard, por ejemplo, el impacto negativo de quitar tokens sospechosos es especialmente visible en clases como CAPEC-242, CAPEC-34 y CAPEC-194, mientras que otras categorías prácticamente no cambian. Eso refuerza una conclusión importante para el libro: la utilidad de las señales léxicas no es uniforme ni universal, pero tampoco puede tratarse como un simple adorno.\
+
+En el plano operativo, multiclase es el bloque más liviano en inferencia para CSIC y TorpEda, con latencias P95 por debajo de 3.3 ms y \textit{throughput} cercano o superior a 400 req/s. Harvard mantiene una inferencia rápida, pero el costo de construcción del modelo es muy superior al de los otros datasets y su pico de memoria durante benchmark también crece con fuerza. Por lo tanto, la discusión de viabilidad debe separar claramente costo de entrenamiento y costo de aplicación: Harvard multiclase es operativo una vez entrenado, pero no es el escenario más cómodo para reentrenamientos frecuentes.
+
+\section{Clasificación multietiqueta}
+\subsection{Métricas globales}
+\begin{table}[H]
+\centering
+\caption{Métricas globales multietiqueta por dataset y variante.}
+\label{tab:res-ml-eff}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llcccccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & \textbf{F1 micro} & \textbf{F1 macro} & \textbf{Hamming} & \textbf{Jaccard micro} & \textbf{EMR} & $t_{build}$ (s) & $t_{apply}^{\dagger}$ (s) & \textbf{Thr.} \\
+\midrule
+CSIC 2010 & Base & 0.8336 & 0.7361 & 0.1664 & 0.7147 & 0.8336 & 2.4590 & 2.0293 & 295.67 \\CSIC 2010 & Sin tokens & 0.7771 & 0.7338 & 0.2229 & 0.6355 & 0.7771 & 1.9575 & 1.9460 & 308.33 \\SR-BH 2020 & Base & 0.6582 & 0.1079 & 0.0039 & 0.4906 & 0.7820 & 19.96 & 6.57 & 91.32 \\SR-BH 2020 & Sin tokens & 0.2052 & 0.1013 & 0.0508 & 0.1143 & 0.0723 & 37.69 & 6.36 & 94.29 \\CSIC/TorpEda 2012 & Base & 0.8498 & 0.2601 & 0.0288 & 0.7388 & 0.7681 & 2.6578 & 2.2321 & 268.84 \\CSIC/TorpEda 2012 & Sin tokens & 0.4725 & 0.2393 & 0.2085 & 0.3094 & 0.3902 & 1.5397 & 2.3763 & 252.49 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Métricas extendidas disponibles para las corridas multietiqueta de Harvard y TorpEda.}
+\label{tab:res-ml-extra}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & \textbf{Prec. micro} & \textbf{Recall micro} & \textbf{PR AUC micro} & \textbf{PR AUC macro} & \textbf{ROC AUC micro} & \textbf{ROC AUC macro} \\
+\midrule
+SR-BH 2020 & Base & 0.9376 & 0.5071 & 0.7297 & 0.1383 & 0.9903 & 0.7075 \\SR-BH 2020 & Sin tokens & 0.1160 & 0.8886 & 0.1271 & 0.1269 & 0.9718 & 0.9571 \\CSIC/TorpEda 2012 & Base & 0.8746 & 0.8263 & 0.9244 & --- & 0.9864 & --- \\CSIC/TorpEda 2012 & Sin tokens & 0.3148 & 0.9473 & 0.7721 & --- & 0.9555 & --- \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+El Cuadro~\ref{tab:res-ml-extra} requiere una aclaración explícita. En SR-BH~2020, la variante base conserva la mejor combinación entre precisión micro, \textit{PR AUC} micro y \textit{ROC AUC} micro, mientras que la ablación sin tokens sospechosos empuja el \textit{recall} micro a valores muy altos a costa de una caída extrema de precisión. Esa combinación es típica de una sobrepredicción agresiva: el modelo recupera más etiquetas positivas, pero también dispara muchos más falsos positivos. El hecho de que \textit{ROC AUC} macro resulte mayor en la ablación no contradice esa lectura, porque AUC resume capacidad de ordenamiento sobre distintos umbrales, mientras que precisión, \textit{exact match}, Jaccard y $F_1$ dependen de la decisión binaria finalmente aplicada en inferencia.
+
+En CSIC/TorpEda~2012, los símbolos --- de \textit{PR AUC} macro y \textit{ROC AUC} macro no representan rendimiento nulo ni error de cálculo. Responden a una decisión metodológica ligada a la forma en que esas corridas fueron formuladas. El script multietiqueta incorpora un modo de compatibilidad \texttt{reduced-binary-mode} para datasets cuya columna multietiqueta queda efectivamente reducida a una única dimensión positiva; en ese escenario el problema deja de comportarse como un multietiqueta rico y pasa a interpretarse como un caso binario reducido, con bloque específico de métricas binarias y con menor utilidad real de los promedios entre etiquetas. En los comandos utilizados, esa lógica se activa de manera forzada para CSIC y se habilita en modo automático para TorpEda. Bajo esa formulación, los promedios macro de \textit{PR AUC} y \textit{ROC AUC} dejan de aportar una lectura sustantivamente distinta: con una sola dimensión efectiva, el promedio macro colapsa hacia la misma señal de ordenamiento que ya queda representada por la evaluación binaria del objetivo activo y por las métricas micro conservadas en el cuadro. Por esa razón se prefirió marcar esas celdas con --- en lugar de exhibirlas como si fueran evidencia adicional de un comportamiento multietiqueta pleno, algo que habría sobreinterpretado la estructura real de esas corridas.
+
+\begin{table}[H]
+\centering
+\caption{Métricas binarias derivadas para CSIC 2010 en su formulación multietiqueta reducida a binario.}
+\label{tab:res-ml-csic-bin}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lccccccccc}
+\toprule
+\textbf{Variante} & \textbf{Acc.} & \textbf{Bal. Acc.} & \textbf{Prec.+} & \textbf{Recall+} & \textbf{F1+} & \textbf{MCC} & \textbf{TNR} & \textbf{FPR} & \textbf{FNR} \\
+\midrule
+Base & 0.8336 & 0.7046 & 0.8353 & 0.4392 & 0.5757 & 0.5231 & 0.9700 & 0.0300 & 0.5608 \\Sin tokens & 0.7771 & 0.7608 & 0.5502 & 0.7272 & 0.6264 & 0.4812 & 0.7944 & 0.2056 & 0.2728 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Indicadores operativos consolidados de las corridas multietiqueta.}
+\label{tab:res-ml-op}
+\scriptsize
+\renewcommand{\arraystretch}{1.12}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Dataset} & \textbf{Variante} & \textbf{P95} (ms) & \textbf{CPU} (\%) & \textbf{Peak RSS} (MB) & \textbf{Modelo} (KiB) & \textbf{Tasa de solicitudes fallidas} & \textbf{Lectura} \\
+\midrule
+CSIC 2010 & Base & 4.2743 & 132.07 & 445.46 & 4.17 & 0.0000 & mejor efectividad global \\CSIC 2010 & Sin tokens & 4.2951 & 122.30 & 445.56 & 3.85 & 0.0000 & más rápido bajo carga leve \\SR-BH 2020 & Base & 13.60 & 122.52 & 2862.48 & 50.76 & 0.0000 & mejor equilibrio semántico \\SR-BH 2020 & Sin tokens & 12.77 & 121.79 & 2920.11 & 49.59 & 0.0000 & alto recall, muy baja precisión \\CSIC/TorpEda 2012 & Base & 3.9211 & 124.56 & 436.51 & 9.95 & 0.0000 & baseline claramente superior \\CSIC/TorpEda 2012 & Sin tokens & 4.8011 & 122.88 & 437.49 & 9.53 & 0.0000 & predicción excesivamente expansiva \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+La lectura del bloque multietiqueta requiere más cautela que la de los otros dos. En CSIC 2010, el propio artefacto declara una tarea efectiva \texttt{binary\_reduced}; en otras palabras, el pipeline multietiqueta se conserva por consistencia metodológica, pero el problema observado en prueba ya no es genuinamente multietiqueta. En ese contexto, el modelo base gana con claridad en F1 micro, Jaccard micro y exact match, aunque la ablación obtenga mayor recall positivo y mejor balanced accuracy en la lectura binaria derivada. La diferencia entre ambas lecturas no es una contradicción: una cosa es maximizar coincidencia global bajo predicción más conservadora y otra maximizar recuperación de la clase positiva aceptando muchos más falsos positivos.\
+
+En SR-BH 2020 aparece el caso más exigente del estudio. Allí la variante base domina ampliamente en F1 micro, exact match, Jaccard y precisión micro, mientras que la ablación solo conserva como aparente ventaja un recall micro muy alto acompañado por una caída drástica de precisión. El patrón es claro: sin tokens sospechosos, el modelo pasa a sobrepredecir etiquetas con una agresividad que destruye la coincidencia exacta y el solapamiento útil entre conjuntos reales y predichos.\
+
+TorpEda 2012 muestra un comportamiento similar. Aunque la tarea se declara como multietiqueta, el mismo artefacto advierte que la cardinalidad real observada en prueba equivale en la práctica a una sola etiqueta o instancia vacía. Aun así, la comparación sigue siendo informativa: el baseline mantiene la mejor combinación entre F1 micro, Jaccard, exact match y AUC, mientras que la ablación incrementa fuertemente la cardinalidad predicha y la proporción de instancias clasificadas como multietiqueta, produciendo una salida excesivamente expansiva.\
+
+\section{Síntesis transversal}
+La comparación completa confirma que ninguna formulación domina de manera universal a las otras. El bloque one-class cumple mejor cuando la pregunta principal es si una solicitud se aparta o no del soporte de normalidad. El bloque multiclase es el más eficiente para tipificar cuando las clases están suficientemente definidas y la inferencia debe permanecer liviana. El bloque multietiqueta conserva su mayor valor analítico en SR-BH 2020, donde la riqueza semántica del problema justifica el costo adicional y donde la simplificación a una sola etiqueta empobrecería la lectura del fenómeno.\
+
+También se observa que la utilidad de las variables de tokens sospechosos depende del escenario. En Harvard multiclase y multietiqueta, y en TorpEda multiclase y multietiqueta, esas variables aportan una fracción visible del rendimiento. En cambio, en CSIC multiclase y en parte del bloque one-class la ablación genera cambios menores o incluso mejoras marginales. Por eso no corresponde defender una postura absoluta; lo defendible es mostrar la evidencia de ambas variantes y discutir cuándo esas señales funcionan como atajos demasiado específicos y cuándo constituyen información realmente útil.\
+
+Por último, el costo operativo vuelve a separar tareas. Multiclase es, en general, la formulación más liviana durante la aplicación. One-class conserva tiempos de entrenamiento muy bajos, pero con una huella de memoria mucho más alta. Multietiqueta es la formulación más costosa en SR-BH 2020, aunque también la más fiel a la estructura semántica del dataset. El resultado global del capítulo, por tanto, no es la proclamación de un único mejor modelo, sino la delimitación bastante precisa de qué enfoque conviene según el tipo de etiqueta disponible, el costo operativo tolerable y el grado de riqueza semántica que se desea preservar.\
+
+\section{Limitaciones de las corridas}
+La primera limitación relevante es de soporte de clases. En Harvard multiclase, la clase CAPEC-248 Command Injection no queda representada en el conjunto de prueba y, además, el dataset completo solo aporta un registro de esa categoría. En términos prácticos, esto impide evaluar esa clase con estabilidad estadística y obliga a leer con cautela cualquier promedio macro que dependa de etiquetas declaradas pero ausentes en test. El problema no invalida la corrida, pero sí limita la interpretación de la cobertura multiclase sobre el espacio completo de CAPEC.\
+
+La segunda limitación es de granularidad efectiva. CSIC 2010 en configuración multiclase termina comportándose como un problema de dos etiquetas efectivas en prueba; CSIC 2010 y TorpEda 2012 en configuración multietiqueta se reducen de hecho a escenarios casi monolabel. Estas corridas siguen siendo útiles para sostener la matriz experimental completa y para contrastar el comportamiento del pipeline bajo tareas formalmente distintas, pero no deben presentarse como evidencia de multietiqueta genuina en el mismo sentido que SR-BH 2020.\
+
+La tercera limitación es el alcance del tuning. Todas las corridas utilizaron presupuestos pequeños. Eso es coherente con el carácter reproducible y acotado del estudio, pero no autoriza a afirmar que se halló el óptimo global de cada familia de modelos. Los resultados son comparables dentro del protocolo definido; no constituyen, sin embargo, una búsqueda exhaustiva del máximo desempeño posible.\
+
+La cuarta limitación es de entorno operativo. Los benchmarks informan latencia, throughput, CPU, memoria, tamaño del modelo y tasa de fallos sobre un pipeline local de extracción de características más inferencia. Esa evidencia es útil para estimar factibilidad, pero no sustituye un despliegue real sobre un proxy reverso, con concurrencia sostenida, tráfico de red, reglas de decisión y costos de integración propios de un WAF completo.\
+
+\chapter{Protocolo de evaluación de viabilidad en tiempo real en un entorno tipo WAF}
+
+\section{Requisitos operativos}
+El alcance no incluye el despliegue de un WAF completo, pero sí exige justificar si los modelos estudiados podrían integrarse, al menos teóricamente, dentro de un entorno de inspección HTTP con restricciones de latencia y de recursos. Desde esa perspectiva, los requisitos mínimos son cuatro: (i) mantener una latencia baja y estable en el pipeline de extracción e inferencia; (ii) sostener un \textit{throughput} razonable bajo carga liviana; (iii) evitar picos de memoria incompatibles con un despliegue práctico; y (iv) conservar artefactos de tamaño acotado, de manera que el costo de persistencia y carga del modelo no domine el sistema.\
+
+\section{Consolidado operativo por dataset y modelo}
+\begin{table}[H]
+\centering
+\caption{Resumen consolidado de viabilidad operativa.}
+\label{tab:waf-consolidado}
+\scriptsize
+\renewcommand{\arraystretch}{1.10}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lllcccccccc}
+\toprule
+\textbf{Tarea} & \textbf{Dataset} & \textbf{Variante} & $t_{opt}$ & $t_{build}$ & $t_{apply}^{\dagger}$ & \textbf{Thr.} & \textbf{P95} & \textbf{CPU} & \textbf{Peak RSS} & \textbf{Modelo} \\
+ &  &  & \textbf{(s)} & \textbf{(s)} & \textbf{(s)} & \textbf{(req/s)} & \textbf{(ms)} & \textbf{(\%)} & \textbf{(MB)} & \textbf{(KiB)} \\
+\midrule
+One-class & CSIC 2010 & Base & 4.120 & 1.071 & 2.076 & 192.708 & 9.916 & 130.56 & 873.45 & 569.5 \\One-class & CSIC 2010 & Sin tokens & 4.264 & 1.161 & 2.429 & 164.639 & 10.697 & 144.47 & 861.43 & 561.2 \\One-class & SR-BH 2020 & Base & 3.859 & 5.270 & 1.629 & 245.480 & 6.032 & 123.97 & 5448.73 & 569.5 \\One-class & SR-BH 2020 & Sin tokens & 5.142 & 6.797 & 1.648 & 242.650 & 5.458 & 124.36 & 5429.17 & 561.2 \\One-class & CSIC/TorpEda 2012 & Base & 1.330 & 0.380 & 1.611 & 248.260 & 5.135 & 146.47 & 942.27 & 569.5 \\One-class & CSIC/TorpEda 2012 & Sin tokens & 1.238 & 0.249 & 1.469 & 272.250 & 4.518 & 159.26 & 902.93 & 561.2 \\Multiclase & CSIC 2010 & Base & 2.4525 & 1.0872 & 1.5929 & 376.6683 & 3.2893 & 114.26 & 479.48 & 3.42 \\Multiclase & CSIC 2010 & Sin tokens & 2.3335 & 1.0055 & 1.4508 & 413.5759 & 2.6209 & 118.56 & 467.23 & 3.08 \\Multiclase & SR-BH 2020 & Base & 10.0885 & 137.3066 & 1.5420 & 388.8543 & 2.9597 & 119.90 & 2380.93 & 6.87 \\Multiclase & SR-BH 2020 & Sin tokens & 9.5461 & 144.5713 & 1.5916 & 376.9847 & 3.1997 & 118.12 & 2269.09 & 6.12 \\Multiclase & CSIC/TorpEda 2012 & Base & 3.8222 & 14.6148 & 1.4965 & 400.9321 & 2.8933 & 118.28 & 478.72 & 5.51 \\Multiclase & CSIC/TorpEda 2012 & Sin tokens & 3.7528 & 12.0153 & 1.5008 & 399.7902 & 2.8655 & 116.61 & 472.93 & 4.88 \\Multietiqueta & CSIC 2010 & Base & 0.3287 & 2.4590 & 2.0293 & 295.67 & 4.2743 & 132.07 & 445.46 & 4.17 \\Multietiqueta & CSIC 2010 & Sin tokens & 0.3287 & 1.9575 & 1.9460 & 308.33 & 4.2951 & 122.30 & 445.56 & 3.85 \\Multietiqueta & SR-BH 2020 & Base & 2.98 & 19.96 & 6.57 & 91.32 & 13.60 & 122.52 & 2862.48 & 50.76 \\Multietiqueta & SR-BH 2020 & Sin tokens & N/A & 37.69 & 6.36 & 94.29 & 12.77 & 121.79 & 2920.11 & 49.59 \\Multietiqueta & CSIC/TorpEda 2012 & Base & 0.7330 & 2.6578 & 2.2321 & 268.84 & 3.9211 & 124.56 & 436.51 & 9.95 \\Multietiqueta & CSIC/TorpEda 2012 & Sin tokens & 0.7330 & 1.5397 & 2.3763 & 252.49 & 4.8011 & 122.88 & 437.49 & 9.53 \\\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\noindent\textbf{Aclaración de lectura.} En la fila \textit{Multietiqueta / SR-BH 2020 / Sin tokens}, la celda \texttt{N/A} en $t_{opt}$ indica que la corrida fue ejecutada sin búsqueda de hiperparámetros. No se trata de un tiempo de optimización igual a cero, sino de una etapa omitida por diseño. La implementación de la ablación multietiqueta ejecuta la variante sin tokens sospechosos con el ajuste de hiperparámetros desactivado salvo que se solicite explícitamente una reoptimización. En esa configuración, las diferencias observadas entre la variante base y la variante sin tokens quedan asociadas a la remoción de variables léxicas sospechosas y no a una segunda búsqueda que pudiera modificar el resultado por otra vía. Por esa razón, el valor correcto es \textit{no aplica}. Mantener esta distinción impide leer como eficiencia un bloque de \textit{tuning} que no fue ejecutado.
+
+\section{Lectura de factibilidad}
+El consolidado operativo permite distinguir con bastante claridad tres perfiles. El primero es el de las corridas multiclase sobre CSIC y TorpEda: alta velocidad, latencias muy bajas, artefactos pequeños y memoria moderada. Son las variantes más cómodas para una integración tipo WAF si la tarea de interés es tipificar una única clase por solicitud. El segundo perfil es el de las corridas one-class: su entrenamiento final es rápido y su discusión metodológica es atractiva cuando se quiere entrenar solo con tráfico normal, pero la memoria de proceso es considerablemente mayor, especialmente en Harvard. El tercer perfil es el de las corridas multietiqueta sobre SR-BH 2020: son las más costosas, pero también las que preservan mejor la estructura semántica del dataset más realista del estudio.\
+
+Desde una lectura estrictamente operacional, el cuello de botella más severo del conjunto no está en la inferencia multiclase, sino en la memoria de one-class y en la latencia/throughput de multietiqueta sobre Harvard. Aun así, ninguna corrida muestra tasa de fallos distinta de cero en los benchmarks reportados, lo que permite sostener que, al menos dentro del alcance local del protocolo evaluado, no aparecen señales de inestabilidad catastrófica del pipeline.\
+
+La consecuencia práctica es que la factibilidad teórica sí puede defenderse, pero de forma condicionada. Si el objetivo fuera un componente liviano y de baja latencia para clasificación de ataques con etiqueta única, las variantes multiclase resultan las candidatas más naturales. Si el objetivo fuera una alarma de anomalía entrenada solo con normales, el esquema one-class sigue siendo defendible, aunque con un costo de memoria que debe declararse. Si lo que se busca es conservar la semántica CAPEC multietiqueta de SR-BH 2020, entonces la formulación multietiqueta es la más fiel al problema, pero no la más barata de desplegar.\
+
+\chapter{Conclusiones}
+
+\section{Conclusiones}
+
+\mbox{}
+
+\chapter{Trabajos futuros}
+
+\mbox{}
+
+% ============================================================================
+% APÉNDICE
+% ============================================================================
+\appendix
+
+\chapter{Comandos reproducibles}
+
+\mbox{}
+
+\begin{thebibliography}{99}
+
+\bibitem{owasp_waf}
+OWASP Community. \emph{Web Application Firewall}. \url{https://owasp.org/www-community/Web_Application_Firewall}.
+
+\bibitem{modsecurity_site}
+ModSecurity Project. \emph{Open Source Web Application Firewall}. \url{https://modsecurity.org}.
+
+\bibitem{capec_home}
+MITRE. \emph{CAPEC (Common Attack Pattern Enumeration and Classification)}. \url{https://capec.mitre.org}.
+
+\bibitem{capec_about}
+MITRE. \emph{About CAPEC}. \url{https://capec.mitre.org/about/index.html}.
+
+\bibitem{capec_schema_docs}
+MITRE. \emph{CAPEC Schema (XML) documentation}. \url{https://capec.mitre.org/documents/schema/index.html}.
+
+\bibitem{capec_schema_desc}
+MITRE. \emph{CAPEC Schema Description (v2.5)}. \url{https://capec.mitre.org/documents/documentation/CAPEC_Schema_Description_v2.5.pdf}.
+
+\bibitem{owasp_risk_rating}
+OWASP Community. \emph{OWASP Risk Rating Methodology}. \url{https://owasp.org/www-community/OWASP_Risk_Rating_Methodology}.
+
+\bibitem{srbh_dataverse}
+Sureda Riera, T. et al. \emph{SR-BH 2020 multi-label dataset}. Harvard Dataverse.
+DOI: \url{https://doi.org/10.7910/DVN/OGOIXX}.
+
+\bibitem{srbh_paper}
+Sureda Riera, T. et al. \emph{A new multi-label dataset for Web attacks CAPEC classification using machine learning techniques}.
+Expert Systems with Applications, 2022.
+
+\bibitem{kruegel_vigna_2003}
+Kruegel, C., Vigna, G. \emph{Anomaly Detection of Web-based Attacks}. ACM CCS, 2003.
+\url{https://sites.cs.ucsb.edu/~vigna/publications/2003_kruegel_vigna_ccs03.pdf}.
+
+\bibitem{rifkin_ova}
+Rifkin, R., Klautau, A. \emph{In Defense of One-Vs-All Classification}. JMLR, 2004.
+\url{https://www.jmlr.org/papers/volume5/rifkin04a/rifkin04a.pdf}.
+
+\bibitem{tsoumakas_multilabel_overview}
+Tsoumakas, G., Katakis, I. \emph{Multi-Label Classification: An Overview}. 2007.
+
+\bibitem{islr_logreg}
+James, G., Witten, D., Hastie, T., Tibshirani, R. \emph{An Introduction to Statistical Learning}. Cap. 4 (Logistic Regression).
+
+\bibitem{sklearn_logreg}
+scikit-learn developers. \emph{LogisticRegression documentation}. \url{https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html}.
+
+\bibitem{sklearn_gridsearch}
+scikit-learn developers. \emph{GridSearchCV documentation}. \url{https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html}.
+
+\bibitem{sklearn_randomsearch}
+scikit-learn developers. \emph{RandomizedSearchCV documentation}. \url{https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RandomizedSearchCV.html}.
+
+\bibitem{sklearn_perm_importance}
+scikit-learn developers. \emph{Permutation importance documentation}. \url{https://scikit-learn.org/stable/modules/permutation_importance.html}.
+
+\bibitem{sklearn_sgd_ocsvm}
+scikit-learn developers. \emph{SGDOneClassSVM documentation}. \url{https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.SGDOneClassSVM.html}.
+
+\bibitem{sklearn_kernel_approx}
+scikit-learn developers. \emph{Kernel Approximation documentation (Nystroem / RBFSampler)}. \url{https://scikit-learn.org/stable/modules/kernel_approximation.html}.
+
+\bibitem{sklearn_halving}
+scikit-learn developers. \emph{Successive Halving Iterations documentation}. \url{https://scikit-learn.org/stable/modules/grid_search.html#searching-for-optimal-parameters-with-successive-halving}.
+
+\bibitem{csic2010_impact}
+IMPACT Cyber Trust. \emph{HTTP DATASET CSIC 2010}. \url{https://www.impactcybertrust.org/dataset_view?idDataset=940}.
+
+\bibitem{torpeda_2012}
+Torrano-Gim{\'e}nez, C., P{\'e}rez, A., {\'A}lvarez, G.
+\emph{TORPEDA: Una especificación abierta de conjuntos de datos de ataques a aplicaciones web}. RECSI 2012.
+\url{https://recsi2012.mondragon.edu/es/programa/recsi2012_submission_73.pdf}.
+
+\bibitem{csic2010_doc}
+Information Security Institute (CSIC).
+\emph{HTTP DATASET CSIC 2010 (dataset description)}.
+\url{https://petescully.co.uk/wp-content/uploads/2018/04/http_dataset_csic_2010.pdf}.
+
+\bibitem{ocswaf_zenodo}
+Epp, N., Funk, R., Cappo, C.
+\emph{Anomaly-based Web Application Firewall using HTTP-specific features and One-Class SVM} (artefacto/código, Zenodo).
+\url{https://zenodo.org/records/1336812}, 2018.
+
+\bibitem{riverol_2024}
+Riverol, A., Betarte, G., Martínez, R., Pardo, Á.
+\emph{Capturing the security expert knowledge in feature selection for web application attack detection}.
+LADC 2024. arXiv:2407.18445.
+
+\bibitem{fang_2024}
+Fang, M., Wang, Y., Yang, L., Wu, H., Yin, Z., Liu, X., Xie, Z., Kong, Z.
+\emph{Reinventing web security: An enhanced cycle-consistent generative adversarial network approach to intrusion detection}.
+Electronics, 13(9):1711, 2024.
+
+\bibitem{zhou_2024}
+Zhou, Y., Zhu, H., Chai, Y., Jiang, Y., Liu, Y.
+\emph{Towards Trustworthy Web Attack Detection: An Uncertainty-Aware Ensemble Deep Kernel Learning Model}.
+arXiv:2410.07725, 2024.
+
+\bibitem{saito_pr_auc}
+Saito, T., Rehmsmeier, M.
+\emph{The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets}.
+PLOS ONE 10(3):e0118432, 2015. DOI: \url{https://doi.org/10.1371/journal.pone.0118432}.
+
+\bibitem{chicco_mcc}
+Chicco, D., Jurman, G.
+\emph{The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation}.
+BMC Genomics 21, 6 (2020). DOI: \url{https://doi.org/10.1186/s12864-019-6413-7}.
+
+
+
+\bibitem{scholkopf2001}
+Schölkopf, B., Platt, J. C., Shawe-Taylor, J., Smola, A. J., Williamson, R. C.
+\emph{Estimating the Support of a High-Dimensional Distribution}.
+Neural Computation, 13(7), 2001.
+
+\bibitem{williams2001}
+Williams, C. K. I., Seeger, M.
+\emph{Using the Nyström Method to Speed Up Kernel Machines}.
+Advances in Neural Information Processing Systems 13, 2001.
+
+\bibitem{bergstra2012}
+Bergstra, J., Bengio, Y.
+\emph{Random Search for Hyper-Parameter Optimization}.
+Journal of Machine Learning Research, 13, 2012.
+
+\bibitem{brodersen2010}
+Brodersen, K. H., Ong, C. S., Stephan, K. E., Buhmann, J. M.
+\emph{The Balanced Accuracy and Its Posterior Distribution}.
+Proceedings of the 20th International Conference on Pattern Recognition, 2010.
+
+\end{thebibliography}
+
+\end{document}

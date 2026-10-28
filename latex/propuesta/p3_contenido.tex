@@ -5,465 +5,139 @@
 
 \section{Motivación}
 
-Las aplicaciones web han tenido un gran auge en la última década,
-convirtiéndose en herramientas de uso masivo y frecuente para una
-gran cantidad de usuarios. Pero debido a que las mismas son accesibles
-a través de la red, están expuestas a una gran variedad de ataques
+Las aplicaciones web han tenido un crecimiento constante en la última década,
+convirtiéndose en infraestructuras críticas para servicios de comercio, comunicación
+y administración. Sin embargo, al estar expuestas a través de la red, siguen siendo
+objetivo de una amplia variedad de ataques dirigidos al protocolo \gls{acr3:http},
+tales como inyecciones, \textit{cross-site scripting} y ataques de traversal
 \cite{gimenez2015tfg}.
-Muchas de las aplicaciones web actualmente no están construidas de acuerdo
-a las mejores prácticas de seguridad, posibilitando que  dichas aplicaciones
-queden vulnerables a diferentes ataques.
-Esto se debe a la falta de consciencia sobre la importancia de la
-seguridad y en muchos casos también a una falta de tiempo, ya que se
-suele priorizar el desarrollo de funcionalidades por encima de la seguridad.
-Esta es la situación de aplicaciones existentes como también lo
-puede ser para aplicaciones futuras. Por lo tanto se necesitan soluciones
-para mitigar los riesgos presentes.
+En muchos casos, las aplicaciones no implementan las mejores prácticas de seguridad,
+o bien priorizan la incorporación de funcionalidades por encima de la robustez
+y controles, exponiendo la infraestructura a riesgos potenciales de pérdida de datos,
+interrupción del servicio y brechas de seguridad.
 
-En este trabajo nosotros investigaremos sobre mecanismos externos
-especializados en la detección de ataques, con el fin de mitigar los
-riesgos creados por las vulnerabilidades presentes en las aplicaciones web.
-\bigskip
+En este contexto, los sistemas de detección y prevención de intrusiones
+(\gls{acr3:ids}, \gls{acr3:ips}) y, particularmente, los cortafuegos para aplicaciones
+web (\gls{acr3:waf}), juegan un rol fundamental para identificar y mitigar ataques en
+tiempo real. El uso de técnicas de \gls{acr3:ml} permite mejorar la detección de
+comportamientos anómalos y descubrir patrones emergentes que no están cubiertos por
+reglas estáticas \cite{buczak2016survey,kruegel2003anomaly,nguyen2011application}.
+En particular, los enfoques de \gls{acr3:occ} como \gls{acr3:ocsvm} son
+atractivos para escenarios con escasez de muestras rotuladas de ataques, o con
+alta variabilidad de tráfico normal \cite{khan2009survey,parhizkar2015oc}.
 
-\gls{acr3:ids} son programas o dispositivos especializados para
-monitorear las actividades en un sistema en busca de intrusiones no
-autorizadas o posibles ataques \cite{scarfone2007guide}.
-Las respuestas frente a posibles intrusiones pueden ser variadas, desde
-envío de alertas hasta medidas concretas de mitigación y contención de
-los posibles ataques. En este último caso se puede hablar también más
-específicamente de \gls{acr3:ips} \cite{scarfone2007guide}.
-
-Los \gls{acr3:ids} pueden basarse en varias fuentes de datos para sus
-análisis, como por ejemplo el tráfico de una red o los registros de
-acciones en un sistema operativo \cite{torranoGimenez2015study}.
-Como las aplicaciones web utilizan mayormente el protocolo \gls{acr3:http}
-\cite{fielding1999http} para sus comunicaciones, se necesita un
-\gls{acr3:ids} que pueda monitorear el tráfico \gls{acr3:http},
-analizando los paquetes enviados y recibidos a través de las conexiones
-de red. En este caso se puede hablar más específicamente de \gls{acr3:waf}
-\cite{torranoGimenez2015study}.
-
-Nuestra propuesta puede ser considerada un \gls{acr3:waf} que tiene la
-finalidad de detectar ataques contra aplicaciones web.
-Cabe mencionar que debido a que \gls{acr3:waf} es un término más específico
-que \gls{acr3:ids}, muchos de los conceptos expuestos a continuación aplican
-a ambos términos, pero nosotros nos enfocamos únicamente en \gls{acr3:waf}
-en este trabajo.
-\bigskip
-
-Los \gls{acr3:waf} pueden utilizar dos métodos distintos para la detección
-de intrusiones.
-Una forma puede ser la búsqueda de patrones de ataques conocidos, llamado
-también método basado en firmas de ataques (\textit{signature-based
-detection}).
-Otro método empleado es la búsqueda de desviaciones o anomalías en el
-tráfico \gls{acr3:http}, ya que estas pueden indicar ataques
-(\textit{anomaly-based detection}) \cite{torranoGimenez2015study}.
-
-Para que un \gls{acr3:waf} pueda utilizar eficazmente el método por firmas,
-es necesario que el mismo mantenga una lista actualizada de las firmas de
-todos los ataques conocidos. Esto resulta en un aumento del uso de tiempo y
-recursos por parte de los \gls{acr3:waf} al momento de analizar el tráfico
-de red, ya que la lista de ataques descubiertos crece y probablemente
-nunca deje de crecer \cite{kruegel2003anomaly}.
-
-El método de detección de anomalías no requiere una lista de firmas,
-sino que en su fase de entrenamiento establece modelos que representan al
-tráfico normal. Se basa en la premisa de que la mayoría de los ataques se
-diferencian en alguna forma del tráfico normal.
-En adelante usamos el término anomalía para referirnos a los ataques,
-para ser consistentes con la literatura relacionada.
-Así, durante la fase de monitoreo, este método compara el tráfico con los
-modelos establecidos anteriormente con el fin de detectar desviaciones
-significativas, es decir, aquellos paquetes \gls{acr3:http} que son
-considerados anomalías \cite{kruegel2003anomaly}.
-La fase de entrenamiento es obligatoria una vez al inicio del uso del
-sistema y después solamente si hay cambios en el tráfico normal, por ejemplo
-después de una actualización a una de las aplicaciones web que protege el
-\gls{acr3:waf} en cuestión.
-
-El método por anomalías tiene la ventaja de poder detectar anomalías
-novedosas desde el momento que aparezcan, mientras que los métodos por
-firmas dependen de la actualización de su lista de ataques conocidos
-\cite{kruegel2003anomaly}.
-
-A pesar de esto, \gls{acr3:waf} basados en anomalías no son tan comunes
-como aquellos basados en firmas \cite{sommer2010outside}.
-Esto se debe en parte a que suele ser más complicado establecer modelos
-significativos para diferenciar muestras normales de anómalas y,
-como consecuencia, hay menos posibilidades de detectar eficazmente
-las anomalías. De esta manera los métodos por anomalías corren el peligro
-de caer en extremos. Por un lado, si se concentran en detectar todas las
-anomalías, pueden marcar equivocadamente muestras normales como anómalas
-(más errores de falsos negativos). Por otro lado, si los métodos priorizan
-no bloquear ninguna muestra normal, puede que muchas anomalías no sean
-detectadas (más errores de falsos positivos) \cite{torranoGimenez2015study}.
-
-Nuestra propuesta es un \gls{acr3:waf} basado en detección de anomalías
-en el tráfico \gls{acr3:http}, buscando mejorar algunas de las propuestas
-que ya han sido presentados por otros investigadores, como por ejemplo
-Kruegel \cite{kruegel2003anomaly}, Giménez \cite{gimenez2015tfg} y
-Torrano-Giménez \cite{torranoGimenez2015study}.
-\bigskip
-
-Para la detección de anomalías se puede utilizar varias estrategias.
-Una opción es emplear herramientas estadísticas, como podemos ver en los
-trabajos de Kruegel \cite{kruegel2003anomaly}, Giménez \cite{gimenez2015tfg}
-y Torrano-Giménez \cite{torranoGimenez2015study}.
-También se puede utilizar herramientas del área de \gls{acr3:ml}
-\cite{torranoGimenez2015study} para tratar de detectar las anomalías.
-Podemos ver ejemplos de estos en los trabajos de Sommer \cite{sommer2010outside},
-Buczak \cite{buczak2016survey}, Parhizkar \cite{parhizkar2015oc}
-y también en el trabajo ya mencionado de Torrano-Giménez
-\cite{torranoGimenez2015study}.
-
-Las herramientas de \gls{acr3:ml} han sido empleadas con mucho éxito
-en varias áreas de la computación, como por ejemplo en sistemas de
-recomendación de productos, clasificación de imágenes, reconocimiento
-óptico de caracteres, entre otros \cite{torranoGimenez2015study}.
-
-Una de las áreas de \gls{acr3:ml} son los problemas de clasificación, y la
-detección de anomalías se puede encarar como un problema de esta área.
-\gls{acr3:ml} puede utilizar varias herramientas para clasificar los
-datos de entrada en varios grupos o clases.
-En este contexto se habla de aprendizaje supervisado si se especifican
-todas las clases posibles de antemano, usando solamente muestras para
-el entrenamiento de las que se conocen sus clases. Muestras nuevas serán
-asignadas a la clase a la que más se parezcan. Se habla de aprendizaje no
-supervisado cuando no se provee muestras con clases conocidas de antemano
-y la herramienta trata de encontrar las clases presentes en las muestras.
-Este segundo caso está también estrechamente relacionado con los problemas
-de agrupamiento (\textit{clustering}) \cite{torranoGimenez2015study}.
-
-Aplicado a un \gls{acr3:waf}, se puede usar clasificación supervisada
-con una clase para tráfico normal y otra (o también varias otras) para
-tráfico anómalo.
-Un primer desafío con este abordaje es que se necesita volver a entrenar
-el clasificador cuando aparece un nuevo tipo de anomalía. Si no se
-vuelve a entrenarlo con los nuevos tipos de anomalías, es posible que
-el mismo clasifique equivocadamente una anomalía como normal en el caso
-de una anomalía nueva que no se ajusta suficientemente a las clases de
-anomalías vistas anteriormente por el clasificador.
-Un segundo desafío es la necesidad de obtener muestras de todos los tipos
-de anomalías conocidas para realizar un entrenamiento completo.
-
-Estos dos desafíos se trata de superar con la estrategia conocida bajo el
-nombre de \gls{acr3:occ} \cite{khan2009survey}. Se busca definir una sola
-clase, la clase positiva, y clasificar las muestras de acuerdo a si
-pertenecen o no a dicha clase. La fase de entrenamiento utiliza solamente
-muestras de la clase positiva, de forma que una muestra que no se ajuste
-a la clase positiva sea clasificada como no perteneciente a la misma
-(clase negativa). Esto provee robustez frente a la aparición de muestras
-negativas nuevas.
-Esta estrategia ha sido utilizada con éxito en varias áreas, como detección
-de spam, reconocimiento de rostros, detección de fallas en maquinarias, entre
-otros \cite{khan2009survey}.
-Aplicado a un \gls{acr3:waf}, la clase positiva estará conformada solamente
-por el tráfico normal y todos los tipos de anomalías no pertenecerán a dicha
-clase. Además, una gran ventaja con este abordaje es que no se necesita
-muestras anómalas para el entrenamiento.
-
-Para nuestra propuesta implementaremos un \gls{acr3:waf} que emplea
-\gls{acr3:occ} con herramientas de \gls{acr3:ml} para detectar tráfico
-\gls{acr3:http} anómalo. Con este abordaje solamente se necesita entrenar
-una vez el clasificador con tráfico normal y, mientras no cambie la
-aplicación, no debería ser necesario volver a entrenarlo, aún con
-la aparición de nuevas anomalías.
-\bigskip
-
-Los algoritmos o herramientas utilizados en \gls{acr3:ml} son muy diversos,
-como por ejemplo árboles de decisiones, redes neuronales, algoritmos
-genéticos, entre otros \cite{torranoGimenez2015study}. Una de estas
-herramientas, que ha sido utilizada con mucho éxito en las tareas de
-clasificación, es la \gls{acr3:svm}. Una versión modificada del \gls{acr3:svm}
-ha sido propuesta como una de varias alternativas para afrontar tareas de
-\gls{acr3:occ} \cite{scholkopf2001estimating}.
-Varios investigadores ya han empleado exitosamente este clasificador
-\gls{acr3:ocsvm} en problemas de distintas áreas, como por ejemplo
-clasificación de textos, clasificación de rostros, detección de spam,
-detección de fallas en máquinas, entre otros \cite{khan2009survey}.
-
-En este trabajo utilizaremos un \gls{acr3:ocsvm} para detectar tráfico
-\gls{acr3:http} anómalo, combinando propuestas de varios investigadores
-para obtener una alta eficacia del clasificador.
-\bigskip
-
-Para que un \gls{acr3:waf} basado en detección de anomalías pueda diferenciar
-el tráfico \gls{acr3:http} normal del anómalo, es necesario que existan
-características del tráfico que posibiliten esa diferenciación.
-Ejemplos de esos rasgos pueden ser la longitud de la petición, la aparición
-de ciertos caracteres con significado especial, entre otros
-\cite{kruegel2003anomaly} \cite{nguyen2011application}.
-Además se debe expresar esos rasgos en un formato procesable para las
-herramientas de detección. La mayoría de las herramientas de \gls{acr3:ml}
-no pueden trabajar con los datos crudos y necesitan un paso de
-preprocesamiento de datos.
-Asumiendo la existencia de esas características distintivas, el éxito
-del \gls{acr3:waf} depende de encontrar dichos rasgos y de representarlos
-en una forma entendible para el mecanismo de detección
-\cite{torranoGimenez2015study}.
-En esta parte el conocimiento experto sobre el tráfico \gls{acr3:http}
-ayuda a seleccionar las características más útiles para ese fin.
-Vemos un ejemplo de esta selección en los trabajos de Kruegel
-\cite{kruegel2003anomaly} \cite{kruegel2005multi}, donde el autor utiliza
-el conocimiento sobre la estructura de paquetes \gls{acr3:http} para obtener
-rasgos más específicos, que denomina modelos de anomalías, y así mejorar la
-detección.
-
-En el área de \gls{acr3:ml}, las características de los datos de entrada se
-representan con números, llamados también \textit{features}.
-Por ejemplo para el caso de un \gls{acr3:waf}, el primer número puede
-indicar la cantidad de caracteres de la petición \gls{acr3:http}, el
-segundo la cantidad de dígitos presente y el tercero puede representar
-la entropía calculada a partir de toda la petición.
-De esta forma, la eficacia de detección de anomalías de nuestro clasificador
-\gls{acr3:ocsvm} depende en gran parte de nuestros procesos de
-\textit{feature extraction}, es decir, de los procesos de preprocesamiento
-de datos que extraen las características distintivas del tráfico
-\gls{acr3:http} y las representan con números \cite{torranoGimenez2015study}.
-
-En este trabajo utilizaremos conocimiento experto sobre tráfico \gls{acr3:http}
-para extraer características útiles para la detección de anomalías,
-basandonos en los aportes de Kruegel y otros autores con trabajos relacionados.
-Ya que trabajamos con un clasificador \gls{acr3:ocsvm}, en el resto del
-trabajo utilizamos el término \textit{features} para referirnos a las
-características mencionadas, para ser consistentes con la terminología
-del área de \gls{acr3:ml}.
-
-
-\section{Justificación}
-
-Resumiendo lo expuesto anteriormente, en esta investigación combinamos
-tres áreas de estudio para proponer una solución a la problemática
-descrita. Dichas áreas se pueden observar también en la
-\autoref{fig:areas_de_estudio}.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.6\linewidth]{images/venn-AreasDeEstudio.png}
-
-    \caption{Diagrama de las áreas de estudio de la investigación}
-    \label{fig:areas_de_estudio}
-\end{figure}
-
-\begin{itemize}
-    \item
-    \gls{acr3:ids} con en detección de anomalías:
-    nuestra propuesta busca detectar posibles ataques al reconocerlos como
-    tráfico anómalo.
-    Utilizaremos el método de detección de anomalías debido a las ventajas
-    mencionadas en la sección anterior.
-
-    \item
-    Caracteristicas del tráfico \gls{acr3:http}:
-    utilizar conocimiento experto sobre la estructura del tráfico
-    \gls{acr3:http} puede ayudar para diferenciar las peticiones normales
-    de las anomalías o ataques, como se puede ver en los trabajos de Kruegel
-    \cite{kruegel2003anomaly} \cite{kruegel2005multi}.
-
-    \item
-    \gls{acr3:ml} con \gls{acr3:ocsvm}:
-    utilizamos este clasificador, debido a que otros investigadores obtuvieron
-    buenos resultados al aplicarlo a distintos problemas de \gls{acr3:occ}
-    \cite{khan2009survey} y la detección de tráfico anómalo se puede enfocar
-    como un problema de \gls{acr3:occ}.
-\end{itemize}
-
-En los trabajos de Kruegel se combina las dos primeras áreas descritas
-anteriormente, \gls{acr3:ids} y características del tráfico \gls{acr3:http}.
-Sus ideas ya fueron aplicadas en varios trabajos en años subsecuentes,
-pero no hemos encontrado una investigación que las combine con un
-clasificador \gls{acr3:ocsvm}.
-
-En nuestra opinión un \gls{acr3:waf} que combina las ideas de Kruegel
-con este clasificador puede ser de gran utilidad para la protección de
-aplicaciones web, y eso buscamos confirmar en el marco de este trabajo.
-
+Este trabajo toma como punto de partida el proyecto base de Nico Ralf
+\cite{gimenez2015tfg}, retomando la idea de incorporar detección de anomalías en un
+\gls{acr3:waf} y extendiéndola con nuevas fuentes de datos y características
+(\textit{features}) centradas en \gls{acr3:http}. La ampliación propone integrar
+un dataset de tráfico real etiquetado a nivel de patrones de ataque, lo cual permite
+evaluar no solo la detección binaria (normal/anómalo) sino también la clasificación
+por tipo de ataque, aumentando la utilidad operativa de los resultados.
 
 \section{Objetivos}
 
-\subsection{Objetivo general}
-
-Detectar tráfico \gls{acr3:http} anómalo entre aplicaciones web
-y sus usuarios con el fin de mitigar los riesgos de ataques contra
-dichas aplicaciones, utilizando un \gls{acr3:waf} basado en \gls{acr3:ocsvm}.
-
-
-\subsection{Objetivos específicos}
+El objetivo general es diseñar, implementar y evaluar un prototipo de
+\gls{acr3:waf} que incorpore técnicas de \gls{acr3:ml} para la detección de
+anomalías y la clasificación por tipo de ataque en \gls{acr3:http}, utilizando
+datasets representativos del tráfico web.
 
 \begin{enumerate}
-    \item
-    Diseñar conjuntos de características (\textit{features}) específicas
-    para tráfico \gls{acr3:http} basado en aportes de otros investigadores
-    de la literatura.
-
-    \begin{itemize}
-        \item
-        Se diseñará nuevos conjuntos de \textit{features} para
-        tráfico \gls{acr3:http}, partiendo de los trabajos de Kruegel
-        y combinando sus ideas con trabajos de la literatura especializada.
-    \end{itemize}
-
-    \item
-    Evaluar la eficacia de un \gls{acr3:waf} basado en \gls{acr3:ocsvm}
-    para detectar tráfico \gls{acr3:http} anómalo.
-
-    \begin{itemize}
-        \item
-        Se construirá un \gls{acr3:waf}, utilizando los nuevos conjuntos
-        de \textit{features} diseñados y un clasificador \gls{acr3:ocsvm}.
-        Después se evaluará mediante distintas pruebas la eficacia de
-        detección de tráfico anómalo de esa implementación sencilla.
-    \end{itemize}
-
-    \item
-    Analizar la viabilidad de utilizar el \gls{acr3:waf} propuesto para
-    detección de ataques en tiempo real.
-
-    \begin{itemize}
-        \item
-        Se analizará mediante una implementación sencilla en qué medida
-        los conjuntos de \textit{features} propuestos y el clasificador
-        seleccionado afectan al tiempo de respuesta de las distintas
-        aplicaciones web que están siendo protegidas por el \gls{acr3:waf}.
-    \end{itemize}
+  \item Integrar nuevas fuentes de datos, incorporando un dataset de tráfico real
+        etiquetado a nivel de patrones de ataque, y compararlo con datasets
+        utilizados en trabajos anteriores.
+  \item Diseñar y extraer nuevas \textit{features} específicas de \gls{acr3:http},
+        relacionadas con la estructura de la \gls{acr3:uri}, el método de la
+        solicitud, los parámetros de \textit{query} y la presencia de tokens
+        sospechosos en el contenido y el uso de métodos poco comunes.
+        La motivación de esta selección radica en que tales rasgos han sido vinculados
+        directamente con patrones de explotación típicos en ataques web modernos
+        \cite{nguyen2011application}.
+  \item Analizar el impacto de las nuevas \textit{features}
+        en la capacidad de detección y clasificación de los modelos,
+        identificando cuáles contribuyen más a la discriminación
+        entre tráfico normal y malicioso.
+  \item Evaluar la viabilidad de aplicar los enfoques
+        propuestos en escenarios de tráfico real en tiempo
+        casi real, considerando el costo computacional y la
+        escalabilidad.
 \end{enumerate}
-
 
 \section{Descripción de la propuesta}
 
-Nuestra propuesta en el marco de este trabajo consiste en un \gls{acr3:waf}
-que puede ser colocado frente a varias aplicaciones web con el fin de
-monitorear todo el tráfico \gls{acr3:http} entre dichas aplicaciones y
-sus usuarios. En la \autoref{fig:arquitectura} se puede observar la
-arquitectura general de nuestra propuesta.
+Este trabajo amplía y actualiza el proyecto base de Nico Ralf \cite{gimenez2015tfg} integrando un \gls{acr3:waf} experimental con \textbf{etiquetado por tipo de ataque} y \textbf{nuevas características de tráfico \gls{acr3:http}}. La ampliación se centra en incorporar el dataset \textit{SR-BH 2020} publicado en Harvard Dataverse \cite{harvard2020dataset}, el cual contiene tráfico web real capturado con ModSecurity en un \textit{honeypot} y \textbf{etiquetado manualmente} a nivel de patrones \gls{acr3:capec}. Esta fuente de datos introduce mayor realismo (volumen y diversidad), permitiendo comparar con los escenarios anteriores basados en CSIC/TorpEda y, además, habilitando la evaluación \emph{multi-clase} (y, cuando aplique, \emph{multi-etiqueta}). En la literatura reciente (2024–2025) el dataset se utiliza como referente para evaluación multi-etiqueta y reportes por clase \gls{acr3:capec}, facilitando la comparabilidad de resultados y su validez externa.\footnotesize\footnotemark
+\footnotetext{Véanse, por ejemplo, \cite{arxiv2502srbh,sci2024http,mdpi2024electronics,rg2024gan}.}
 
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=\linewidth]{images/waf-diagram.png}
-    \caption{Diagrama de la arquitectura general de la propuesta}
-    \label{fig:arquitectura}
-\end{figure}
+\subsection*{Objetivos específicos de la ampliación}
+\begin{enumerate}
+  \item \textbf{Integración de un nuevo dataset realista:} incorporar \textit{SR-BH 2020} \cite{harvard2020dataset} y comparar con escenarios heredados (CSIC-2010/TorpEda-2012), elevando realismo y diversidad (más de 900\,k solicitudes, 24 características y 13 etiquetas a nivel \gls{acr3:capec}).
+  \item \textbf{Etiquetado por tipo de ataque:} pasar de un esquema binario (normal/anómalo) a \emph{clasificación por clase de ataque} (multi-clase), y cuando corresponda, evaluar en configuración \emph{multi-etiqueta} con métricas como \gls{acr3:hamloss} y \gls{acr3:f1} macro/micro.
+  \item \textbf{Nuevas \textit{features} de solicitudes HTTP:} diseñar y extraer rasgos adicionales de capa aplicación orientados a mejorar la detección y clasificación:
+  \begin{itemize}
+    \item \texttt{uri\_len}: longitud de la \gls{acr3:uri}.
+    \item \texttt{path\_depth}: cantidad de “/” en el \textit{path} (sin \textit{query}).
+    \item \texttt{query\_len}: longitud de la \textit{query string}.
+    \item \texttt{n\_params}: cantidad de parámetros en la \textit{query}.
+    \item \texttt{max\_param\_len}: longitud máxima entre los valores de parámetros.
+    \item \texttt{uri\_non\_alnum\_ratio}: proporción de caracteres no alfanuméricos en la URI.
+    \item \texttt{pct\_hex\_encoded}: porcentaje de secuencias \%xx (URL-encoding) en la URI.
+    \item \texttt{suspicious\_tokens}: presencia/conteo de tokens sospechosos (\texttt{../}, \texttt{<script}, \texttt{onerror=}, \texttt{'}, \texttt{"}, \texttt{--}, \texttt{;}, \texttt{union}, \texttt{select}, \texttt{sleep(}, \texttt{or 1=1}).
+    \item \texttt{uncommon\_method} y codificación \textit{one-hot} de método HTTP.
+    \item \texttt{req\_content\_length}: \texttt{Content-Length} de la solicitud (0 si no está presente).
+  \end{itemize}
+  \item \textbf{Comparativa de modelos:} replicar y extender los experimentos con \gls{acr3:ocsvm} y establecer \textit{baselines} supervisados (p.\,ej., \gls{acr3:svm}, árboles y ensambles), evaluando el impacto del nuevo etiquetado y de las \textit{features}.
+  \item \textbf{Prototipo de \gls{acr3:waf}:} integrar los mejores modelos en un prototipo con \emph{modo pasivo} (registro) y \emph{modo activo} (detección y respuesta configurable).
+\end{enumerate}
 
-La implementación tendrá la opción de habilitar o deshabilitar la detección
-en tiempo real. Con la detección deshabilitada, el \gls{acr3:waf} se
-limitará a registrar el tráfico para que posteriormente se pueda realizar
-el entrenamiento del clasificador con muestras normales de tráfico.
-Una vez entrenado, se podrá habilitar el modo de detección. En este modo
-el \gls{acr3:waf} analizará todas las peticiones entrantes y registrará
-todas aquellas que sean clasificadas como anómalas.
-Se podrá configurar acciones adicionales que el \gls{acr3:waf} deberá
-realizar como respuesta a una anomalía detectada, siendo una opción
-el bloqueo de la petición en cuestión para evitar que posibles ataques
-lleguen hasta las aplicaciones.
-
+\subsection*{Metodología y diseño experimental}
+\begin{enumerate}
+  \item \textbf{Preprocesamiento y \textit{parsing}:} extracción de campos \gls{acr3:http} y cálculo de \textit{features} (p.\,ej., \texttt{path\_depth}, longitudes de URI/\textit{query}/parámetros, proporciones de caracteres y codificación).
+  \item \textbf{Etiquetado y particionado:} uso de etiquetas \gls{acr3:capec} provistas por \textit{SR-BH 2020} para configurar tareas binaria vs.\ multi-clase y, si aplica, multi-etiqueta; particionado estratificado por clase.
+  \item \textbf{Entrenamiento y selección:} comparación de \gls{acr3:ocsvm} frente a baselines supervisados; búsqueda de hiperparámetros por \textit{grid/random search} con validación cruzada.
+  \item \textbf{Métricas:} precisión, \textit{recall}, \gls{acr3:f1} (macro/micro), curvas \gls{acr3:roc} y AUC (cuando corresponda); \gls{acr3:hamloss} para experimentos multi-etiqueta.
+  \item \textbf{Ablaciones e importancia de \textit{features}:} análisis del aporte marginal de cada \textit{feature} y grupos de \textit{features}.
+  \item \textbf{Integración WAF:} \textit{pipeline} de inferencia (\emph{modo pasivo/activo}) y registro de evidencias para auditoría.
+\end{enumerate}
 
 \section{Alcance y limitaciones}
 
-Según nuestro relevamiento inicial, el trabajo de Kruegel
-\cite{kruegel2003anomaly} es la investigación pionera relacionada con
-\gls{acr3:ids} que se enfoca en las particularidades del tráfico HTTP,
-especialmente el ánalisis de los parámetros y valores dentro de la
-petición. Con más de 600 citas hasta la fecha según Google Scholar,
-este trabajo ha sido utilizado como base para muchas investigaciones
-posteriores.
-
-De esta manera, la investigación del estado del arte que haremos en el
-marco de nuestro trabajo se limitará a las publicaciones que citan a Kruegel
-en sus referencias.
-\bigskip
-
-Para la evaluación cuantitativa de nuestro \gls{acr3:waf} propuesto
-necesitamos conjuntos de datos. Según \cite{torranoGimenez2015study}
-los conjuntos utilizados en las investigaciones sobre \gls{acr3:waf}
-deberían cumplir las siguientes características:
-
+\subsection*{Alcance}
 \begin{itemize}
-    \item
-    Deberían ser públicamente accesibles para que varios investigadores
-    los utilizen y puedan comparar resultados.
-
-    \item
-    Deberían contener tráfico \gls{acr3:http}.
-
-    \item
-    Deberían contener muestras etiquetadas según sean normales o
-    anómalas, o inclusive especificar el tipo de ataque al que
-    pertenecen.
-
-    \item
-    Deberían tener ataques novedosos.
+  \item Integra y compara escenarios heredados del proyecto base con \textit{SR-BH 2020} \cite{harvard2020dataset}.
+  \item Aborda detección y \textbf{clasificación por tipo de ataque} en capa de aplicación.
+  \item Diseña y evalúa un conjunto de \textit{features} HTTP adicionales.
+  \item Entrega un prototipo funcional de \gls{acr3:waf} y resultados reproducibles (código y \textit{notebooks}).
 \end{itemize}
 
-Los trabajos relacionados sobre \gls{acr3:waf} utilizan distintos
-conjuntos de datos para sus pruebas, pero la mayoria de esos
-conjuntos no cumple una o varias de las características mencionadas.
-Encontramos unicamente dos conjuntos que son adecuados para
-nuestras pruebas y se trata de CSIC 2010 \cite{csic2010dataset} y
-CSIC TORPEDA 2012 \cite{torpeda2012dataset}. Así podemos realizar
-comparaciones con los resultados de otros trabajos que utilizan estos
-conjuntos.
-\bigskip
-
-La implementación de un \gls{acr3:waf} que haremos en el marco de este
-trabajo busca ser funcional y sencilla. Se trata de una prueba de concepto,
-y no buscamos obtener una aplicación terminada que incluya todas las
-funcionalidades necesarias para utilizarla directamente en ambientes de
-producción.
-
+\subsection*{Limitaciones}
+\begin{itemize}
+  \item \textbf{Cobertura de clases:} dependemos de las clases \gls{acr3:capec} presentes; clases minoritarias pueden inducir \emph{imbalance}.
+  \item \textbf{Generalización:} la captura de \textit{SR-BH 2020} se realizó en un entorno específico (honeypot/ModSecurity); otras organizaciones podrían requerir recalibración.
+  \item \textbf{Costo computacional:} el cálculo de nuevas \textit{features} y clasificación multi-clase aumentan tiempo y memoria; se limitará el número de configuraciones evaluadas.
+  \item \textbf{Privacidad/ética:} uso exclusivo de datasets públicos/anonimizados; no se recolectan datos personales.
+\end{itemize}
 
 \section{Plan de actividades}
 
-A continuación se detallan las actividades que nosotros nos proponemos
-para el desarrollo de este trabajo de investigación. Además, en la
-\autoref{tbl:actividades} se puede observar las duraciones estimadas
-para dichas actividades.
-
-\begin{enumerate}
-    \item
-    Exploración bibliográfica sobre las áreas de \gls{acr3:ids},
-    \gls{acr3:waf} y \gls{acr3:occ}, profundizando especialmente
-    en trabajos que utilizan el clasificador \gls{acr3:ocsvm} y
-    aquellos que basan sus \textit{features} en los trabajos de Kruegel.
-
-    \item
-    Diseño de nuevos conjuntos de \textit{features} específicos para
-    tráfico \gls{acr3:http}, combinando las ideas de Kruegel con aportes
-    propios y también de otros investigadores.
-
-    \item
-    Construcción de un \gls{acr3:waf} con los \textit{features} diseñados
-    y con un clasificador \gls{acr3:ocsvm}.
-
-    \item
-    Pruebas de eficacia de detección del \gls{acr3:waf} construido,
-    buscando conjuntos de \textit{features} y configuraciones del
-    clasificador que mejoren la detección.
-
-    \item
-    Pruebas de rendimiento del \gls{acr3:waf} construido, analizando
-    en qué medida el mismo afecta al tiempo de respuesta de los
-    sistemas que debe proteger.
-
-    \item
-    Análisis de resultados y formulación de conclusiones.
-\end{enumerate}
-
 \begin{table}[ht]
-    \centering
-    \small
-    \begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}|l|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
-        \hline
-        Año & \multicolumn{18}{c|}{2017} \\ \hline
-        Mes & \multicolumn{5}{c|}{Agosto} & \multicolumn{4}{c|}{Setiembre} & \multicolumn{4}{c|}{Octubre} & \multicolumn{5}{c|}{Noviembre} \\ \hline
-        Semana & 1 & 2 & 3 & 4 & 5 & 1 & 2 & 3 & 4 & 1 & 2 & 3 & 4 & 1 & 2 & 3 & 4 & 5 \\ \hline \hline
-        Actividad 1 & x & x & x & x & x & x & x &  &  &  &  &  &  &  &  &  &  &  \\ \hline
-        Actividad 2 &  &  &  &  & x & x & x &  &  &  &  &  &  &  &  &  &  &  \\ \hline
-        Actividad 3 &  &  &  &  &  &  &  & x & x & x & x &  &  &  &  &  &  &  \\ \hline
-        Actividad 4 &  &  &  &  &  &  &  &  &  &  &  & x & x & x &  &  &  &  \\ \hline
-        Actividad 5 &  &  &  &  &  &  &  &  &  &  &  & x & x & x &  &  &  &  \\ \hline
-        Actividad 6 &  &  &  &  &  &  &  &  &  &  &  &  &  &  & x & x & x & x \\ \hline
-    \end{tabular*}
-    \caption{Duración estimada de actividades}
-    \label{tbl:actividades}
+\centering
+\begin{tabular}{|p{5cm}|p{8cm}|}
+\hline
+\textbf{Fase} & \textbf{Entregables principales} \\
+\hline
+1. Revisión y diseño (sem.\ 1--2) & Protocolo experimental; definición final de \textit{features}; plan de etiquetado/clases. \\
+\hline
+2. Ingesta y preprocesamiento (sem.\ 3--4) & Parsers HTTP; cálculo de \textit{features}; \textit{EDA} y análisis de \emph{imbalance}. \\
+\hline
+3. Modelado inicial (sem.\ 5--6) & Baselines (OCC/OCSVM y supervisados simples); métricas base; \textit{benchmark} binario vs.\ multi-clase. \\
+\hline
+4. Ablaciones y selección (sem.\ 7--8) & Importancia de \textit{features}; mejores modelos e hiperparámetros. \\
+\hline
+5. Integración WAF (sem.\ 9) & Prototipo con modo pasivo/activo; registro de eventos; documentación técnica. \\
+\hline
+6. Redacción y validación (sem.\ 10) & Informe final, anexos reproducibles, y presentación. \\
+\hline
+\end{tabular}
+\caption{Plan de actividades propuesto.}
+\label{tbl:plan}
 \end{table}
+
